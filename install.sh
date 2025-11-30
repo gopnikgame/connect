@@ -93,13 +93,15 @@ check_dependencies() {
             print_msg "$BLUE" "Установка зависимостей..."
             
             # Update package list
-            if ! apt-get update >/dev/null 2>&1; then
+            print_msg "$BLUE" "Обновление списка пакетов..."
+            if ! apt-get update; then
                 print_msg "$RED" "Ошибка: Не удалось обновить список пакетов."
                 print_msg "$YELLOW" "Попробуйте выполнить вручную: sudo apt-get update"
                 exit 1
             fi
             
             # Install missing dependencies
+            print_msg "$BLUE" "Установка пакетов:$missing_deps"
             if ! apt-get install -y $missing_deps; then
                 print_msg "$RED" "Ошибка: Не удалось установить зависимости."
                 print_msg "$YELLOW" "Попробуйте выполнить вручную: sudo apt-get install -y$missing_deps"
@@ -114,6 +116,24 @@ check_dependencies() {
         fi
     else
         print_msg "$GREEN" "Все зависимости установлены."
+    fi
+    
+    # Test internet connectivity
+    print_msg "$BLUE" "Проверка подключения к GitHub..."
+    if command -v wget >/dev/null 2>&1; then
+        if ! wget -q --spider --timeout=10 https://raw.githubusercontent.com 2>/dev/null; then
+            print_msg "$YELLOW" "Предупреждение: Нет подключения к GitHub (raw.githubusercontent.com)"
+            print_msg "$YELLOW" "Это может вызвать проблемы при загрузке файлов"
+        else
+            print_msg "$GREEN" "Подключение к GitHub работает"
+        fi
+    elif command -v curl >/dev/null 2>&1; then
+        if ! curl -sSf --max-time 10 https://raw.githubusercontent.com >/dev/null 2>&1; then
+            print_msg "$YELLOW" "Предупреждение: Нет подключения к GitHub (raw.githubusercontent.com)"
+            print_msg "$YELLOW" "Это может вызвать проблемы при загрузке файлов"
+        else
+            print_msg "$GREEN" "Подключение к GitHub работает"
+        fi
     fi
 }
 
@@ -159,7 +179,7 @@ save_config() {
     
     mkdir -p "$clone_dir"
     
-    cat > "$CONFIG_FILE" << EOF
+    cat >> "$CONFIG_FILE" << EOF
 {
     "github_username": "$github_username",
     "github_token": "$github_token",
