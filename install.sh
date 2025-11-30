@@ -45,33 +45,29 @@ check_permissions() {
         BIN_LINK="$HOME/.local/bin/mygit"
         mkdir -p "$HOME/.local/bin"
         # Add to PATH if not already there
-        case ":$PATH:" in
-            *":$HOME/.local/bin:"*) ;;
-            *)
-                print_msg "$YELLOW" "Добавление $HOME/.local/bin в PATH в ~/.bashrc"
-                echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-                ;;
-        esac
+        if echo ":$PATH:" | grep -q ":$HOME/.local/bin:"; then
+            : # Уже в PATH
+        else
+            print_msg "$YELLOW" "Добавление $HOME/.local/bin в PATH в ~/.bashrc"
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+        fi
     fi
 }
 
-# Check for required dependencies
+# Остальной код без изменений...
 check_dependencies() {
     print_msg "$BLUE" "Проверка зависимостей..."
     
     missing_deps=""
     
-    # Check for git
     if ! command -v git >/dev/null 2>&1; then
         missing_deps="$missing_deps git"
     fi
     
-    # Check for python3
     if ! command -v python3 >/dev/null 2>&1; then
         missing_deps="$missing_deps python3"
     fi
     
-    # Check for pip3
     if ! command -v pip3 >/dev/null 2>&1; then
         missing_deps="$missing_deps python3-pip"
     fi
@@ -86,12 +82,10 @@ check_dependencies() {
     print_msg "$GREEN" "Все зависимости установлены."
 }
 
-# Prompt for GitHub credentials
 get_credentials() {
     print_msg "$BLUE" "Настройка доступа к GitHub..."
     echo ""
     
-    # GitHub username
     printf "Введите ваше имя пользователя GitHub: "
     read github_username
     if [ -z "$github_username" ]; then
@@ -99,7 +93,6 @@ get_credentials() {
         exit 1
     fi
     
-    # GitHub Personal Access Token
     echo ""
     print_msg "$YELLOW" "Вам необходим GitHub Personal Access Token (PAT) с правами 'repo'."
     print_msg "$YELLOW" "Создайте его на: https://github.com/settings/tokens"
@@ -115,7 +108,6 @@ get_credentials() {
         exit 1
     fi
     
-    # Default clone directory
     echo ""
     printf "Введите директорию по умолчанию для клонирования репозиториев [$HOME/mygit-repos]: "
     read clone_dir
@@ -124,18 +116,14 @@ get_credentials() {
     fi
 }
 
-# Save configuration
 save_config() {
     print_msg "$BLUE" "Сохранение конфигурации..."
     
-    # Create config directory
     mkdir -p "$CONFIG_DIR"
     chmod 700 "$CONFIG_DIR"
     
-    # Create clone directory
     mkdir -p "$clone_dir"
     
-    # Save config as JSON using Python for proper escaping
     python3 -c "
 import json
 
@@ -149,23 +137,18 @@ with open('$CONFIG_FILE', 'w') as f:
     json.dump(config, f, indent=4)
 "
     
-    # Secure the config file
     chmod 600 "$CONFIG_FILE"
     
     print_msg "$GREEN" "Конфигурация сохранена в $CONFIG_FILE"
 }
 
-# Install the main Python program
 install_program() {
     print_msg "$BLUE" "Установка MyGit..."
     
-    # Create installation directory
     mkdir -p "$INSTALL_DIR"
     
-    # Get the directory where install.sh is located
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
     
-    # Copy the Python program
     if [ -f "$SCRIPT_DIR/mygit.py" ]; then
         cp "$SCRIPT_DIR/mygit.py" "$INSTALL_DIR/mygit.py"
         chmod +x "$INSTALL_DIR/mygit.py"
@@ -174,7 +157,6 @@ install_program() {
         exit 1
     fi
     
-    # Create symlink
     if [ -L "$BIN_LINK" ] || [ -e "$BIN_LINK" ]; then
         rm -f "$BIN_LINK"
     fi
@@ -184,7 +166,6 @@ install_program() {
     print_msg "$GREEN" "Символическая ссылка создана: $BIN_LINK"
 }
 
-# Print usage instructions
 print_usage() {
     echo ""
     print_msg "$GREEN" "=============================================="
@@ -205,7 +186,6 @@ print_usage() {
     fi
 }
 
-# Main installation process
 main() {
     print_header
     check_permissions
@@ -216,5 +196,4 @@ main() {
     print_usage
 }
 
-# Run main function
 main
