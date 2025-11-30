@@ -360,19 +360,25 @@ install_program() {
         rm -f "$mygit_source"
     fi
     
-    # Create symbolic link
-    if [ -L "$BIN_LINK" ] || [ -e "$BIN_LINK" ]; then
+    # Create wrapper script instead of symbolic link
+    if [ -e "$BIN_LINK" ]; then
         rm -f "$BIN_LINK"
     fi
     
-    if ! ln -s "$INSTALL_DIR/mygit.py" "$BIN_LINK"; then
-        print_msg "$RED" "Ошибка: Не удалось создать символическую ссылку"
-        exit 1
-    fi
+    print_msg "$BLUE" "Создание wrapper скрипта..."
+    cat > "$BIN_LINK" << 'EOF'
+#!/usr/bin/env bash
+exec python3 "INSTALL_DIR_PLACEHOLDER/mygit.py" "$@"
+EOF
+    
+    # Replace placeholder with actual install directory
+    sed -i "s|INSTALL_DIR_PLACEHOLDER|$INSTALL_DIR|g" "$BIN_LINK"
+    
+    chmod +x "$BIN_LINK"
     
     print_msg "$GREEN" "MyGit успешно установлен!"
     print_msg "$GREEN" "Файл программы: $INSTALL_DIR/mygit.py"
-    print_msg "$GREEN" "Символическая ссылка: $BIN_LINK"
+    print_msg "$GREEN" "Wrapper скрипт: $BIN_LINK"
     print_msg "$GREEN" "Конфигурация: $CONFIG_FILE"
     
     # Verify installation
