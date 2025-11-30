@@ -1,9 +1,9 @@
-#!/bin/bash
+﻿#!/bin/bash
 
 # =============================================================================
 # MyGit Installer Script
-# Script for installing the private GitHub repository connector
-# Designed for Ubuntu server operating systems
+# Скрипт установки коннектора приватных репозиториев
+# Разработан для операционных систем Ubuntu server
 # =============================================================================
 
 set -e
@@ -32,7 +32,7 @@ print_msg() {
 print_header() {
     echo ""
     print_msg "$BLUE" "=============================================="
-    print_msg "$BLUE" "      MyGit - Private Repository Connector     "
+    print_msg "$BLUE" "   MyGit - Коннектор приватных репозиториев   "
     print_msg "$BLUE" "=============================================="
     echo ""
 }
@@ -40,13 +40,13 @@ print_header() {
 # Check if running as root for system-wide installation
 check_permissions() {
     if [[ $EUID -ne 0 ]]; then
-        print_msg "$YELLOW" "Warning: Not running as root. Will attempt local installation."
+        print_msg "$YELLOW" "Внимание: Скрипт запущен без прав root. Будет выполнена локальная установка."
         INSTALL_DIR="$HOME/.local/share/mygit"
         BIN_LINK="$HOME/.local/bin/mygit"
         mkdir -p "$HOME/.local/bin"
         # Add to PATH if not already there
         if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-            print_msg "$YELLOW" "Adding $HOME/.local/bin to PATH in ~/.bashrc"
+            print_msg "$YELLOW" "Добавление $HOME/.local/bin в PATH в ~/.bashrc"
             echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
         fi
     fi
@@ -54,7 +54,7 @@ check_permissions() {
 
 # Check for required dependencies
 check_dependencies() {
-    print_msg "$BLUE" "Checking dependencies..."
+    print_msg "$BLUE" "Проверка зависимостей..."
     
     local missing_deps=()
     
@@ -74,49 +74,49 @@ check_dependencies() {
     fi
     
     if [ ${#missing_deps[@]} -ne 0 ]; then
-        print_msg "$RED" "Missing dependencies: ${missing_deps[*]}"
-        print_msg "$YELLOW" "Please install them using:"
+        print_msg "$RED" "Отсутствуют зависимости: ${missing_deps[*]}"
+        print_msg "$YELLOW" "Пожалуйста, установите их используя:"
         print_msg "$YELLOW" "  sudo apt update && sudo apt install -y ${missing_deps[*]}"
         exit 1
     fi
     
-    print_msg "$GREEN" "All dependencies are installed."
+    print_msg "$GREEN" "Все зависимости установлены."
 }
 
 # Prompt for GitHub credentials
 get_credentials() {
-    print_msg "$BLUE" "Configuring GitHub access..."
+    print_msg "$BLUE" "Настройка доступа к GitHub..."
     echo ""
     
     # GitHub username
-    read -p "Enter your GitHub username: " github_username
+    read -p "Введите ваше имя пользователя GitHub: " github_username
     if [[ -z "$github_username" ]]; then
-        print_msg "$RED" "Error: GitHub username cannot be empty."
+        print_msg "$RED" "Ошибка: Имя пользователя GitHub не может быть пустым."
         exit 1
     fi
     
     # GitHub Personal Access Token
     echo ""
-    print_msg "$YELLOW" "You need a GitHub Personal Access Token (PAT) with 'repo' scope."
-    print_msg "$YELLOW" "Create one at: https://github.com/settings/tokens"
+    print_msg "$YELLOW" "Вам необходим GitHub Personal Access Token (PAT) с правами 'repo'."
+    print_msg "$YELLOW" "Создайте его на: https://github.com/settings/tokens"
     echo ""
-    read -sp "Enter your GitHub Personal Access Token: " github_token
+    read -sp "Введите ваш GitHub Personal Access Token: " github_token
     echo ""
     
     if [[ -z "$github_token" ]]; then
-        print_msg "$RED" "Error: GitHub token cannot be empty."
+        print_msg "$RED" "Ошибка: Токен GitHub не может быть пустым."
         exit 1
     fi
     
     # Default clone directory
     echo ""
-    read -p "Enter default directory for cloning repositories [$HOME/mygit-repos]: " clone_dir
+    read -p "Введите директорию по умолчанию для клонирования репозиториев [$HOME/mygit-repos]: " clone_dir
     clone_dir=${clone_dir:-"$HOME/mygit-repos"}
 }
 
 # Save configuration
 save_config() {
-    print_msg "$BLUE" "Saving configuration..."
+    print_msg "$BLUE" "Сохранение конфигурации..."
     
     # Create config directory
     mkdir -p "$CONFIG_DIR"
@@ -150,12 +150,12 @@ PYTHON_SCRIPT
     # Secure the config file
     chmod 600 "$CONFIG_FILE"
     
-    print_msg "$GREEN" "Configuration saved to $CONFIG_FILE"
+    print_msg "$GREEN" "Конфигурация сохранена в $CONFIG_FILE"
 }
 
 # Install the main Python program
 install_program() {
-    print_msg "$BLUE" "Installing MyGit..."
+    print_msg "$BLUE" "Установка MyGit..."
     
     # Create installation directory
     mkdir -p "$INSTALL_DIR"
@@ -168,7 +168,7 @@ install_program() {
         cp "$SCRIPT_DIR/mygit.py" "$INSTALL_DIR/mygit.py"
         chmod +x "$INSTALL_DIR/mygit.py"
     else
-        print_msg "$RED" "Error: mygit.py not found in $SCRIPT_DIR"
+        print_msg "$RED" "Ошибка: mygit.py не найден в $SCRIPT_DIR"
         exit 1
     fi
     
@@ -178,28 +178,28 @@ install_program() {
     fi
     ln -s "$INSTALL_DIR/mygit.py" "$BIN_LINK"
     
-    print_msg "$GREEN" "MyGit installed successfully!"
-    print_msg "$GREEN" "Symlink created at: $BIN_LINK"
+    print_msg "$GREEN" "MyGit успешно установлен!"
+    print_msg "$GREEN" "Символическая ссылка создана: $BIN_LINK"
 }
 
 # Print usage instructions
 print_usage() {
     echo ""
     print_msg "$GREEN" "=============================================="
-    print_msg "$GREEN" "            Installation Complete!             "
+    print_msg "$GREEN" "          Установка завершена!                 "
     print_msg "$GREEN" "=============================================="
     echo ""
-    print_msg "$BLUE" "Usage:"
-    echo "  mygit clone <owner/repo>     - Clone a private repository"
-    echo "  mygit run <owner/repo> <script.sh> - Clone and run a script"
-    echo "  mygit list                   - List cloned repositories"
-    echo "  mygit config                 - Show current configuration"
-    echo "  mygit help                   - Show help message"
+    print_msg "$BLUE" "Использование:"
+    echo "  mygit clone <owner/repo>     - Клонировать приватный репозиторий"
+    echo "  mygit run <owner/repo> <script.sh> - Клонировать и запустить скрипт"
+    echo "  mygit list                   - Список клонированных репозиториев"
+    echo "  mygit config                 - Показать текущую конфигурацию"
+    echo "  mygit help                   - Показать справку"
     echo ""
     if [[ $EUID -ne 0 ]]; then
-        print_msg "$YELLOW" "Note: You may need to restart your terminal or run:"
+        print_msg "$YELLOW" "Примечание: Вам может потребоваться перезапустить терминал или выполнить:"
         print_msg "$YELLOW" "  source ~/.bashrc"
-        print_msg "$YELLOW" "to use the 'mygit' command."
+        print_msg "$YELLOW" "чтобы использовать команду 'mygit'."
     fi
 }
 

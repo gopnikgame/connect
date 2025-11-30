@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-MyGit - Private GitHub Repository Connector
+MyGit - Коннектор приватных репозиториев GitHub
 
-A tool for connecting to private GitHub repositories, cloning them,
-and running shell scripts from them.
+Инструмент для подключения к приватным репозиториям GitHub,
+их клонирования и запуска shell-скриптов.
 
-Designed for Ubuntu server operating systems.
+Разработан для операционных систем Ubuntu server.
 """
 
 import argparse
@@ -19,7 +19,7 @@ from pathlib import Path
 
 
 class Config:
-    """Configuration manager for MyGit."""
+    """Менеджер конфигурации для MyGit."""
     
     def __init__(self):
         self.config_dir = Path.home() / ".mygit"
@@ -27,86 +27,86 @@ class Config:
         self._config = None
     
     def load(self):
-        """Load configuration from file."""
+        """Загрузить конфигурацию из файла."""
         if not self.config_file.exists():
-            print("Error: Configuration not found.")
-            print("Please run the installer first: ./install.sh")
+            print("Ошибка: Конфигурация не найдена.")
+            print("Пожалуйста, сначала запустите установщик: ./install.sh")
             sys.exit(1)
         
         try:
             with open(self.config_file, 'r', encoding='utf-8') as f:
                 self._config = json.load(f)
         except json.JSONDecodeError as e:
-            print(f"Error: Invalid configuration file: {e}")
+            print(f"Ошибка: Некорректный файл конфигурации: {e}")
             sys.exit(1)
         except IOError as e:
-            print(f"Error: Cannot read configuration file: {e}")
+            print(f"Ошибка: Невозможно прочитать файл конфигурации: {e}")
             sys.exit(1)
         
         return self._config
     
     @property
     def username(self):
-        """Get GitHub username."""
+        """Получить имя пользователя GitHub."""
         if self._config is None:
             self.load()
         return self._config.get("github_username", "")
     
     @property
     def token(self):
-        """Get GitHub personal access token."""
+        """Получить персональный токен доступа GitHub."""
         if self._config is None:
             self.load()
         return self._config.get("github_token", "")
     
     @property
     def clone_directory(self):
-        """Get default clone directory."""
+        """Получить директорию клонирования по умолчанию."""
         if self._config is None:
             self.load()
         return Path(self._config.get("clone_directory", str(Path.home() / "mygit-repos")))
     
     def show(self):
-        """Display current configuration (hiding sensitive data)."""
+        """Отобразить текущую конфигурацию (скрывая чувствительные данные)."""
         if self._config is None:
             self.load()
         
-        print("\nCurrent Configuration:")
+        print("\nТекущая конфигурация:")
         print("-" * 40)
-        print(f"GitHub Username: {self.username}")
-        print(f"GitHub Token: {'*' * 16} (configured)")
-        print(f"Clone Directory: {self.clone_directory}")
+        print(f"Имя пользователя GitHub: {self.username}")
+        print(f"Токен GitHub: {'*' * 16} (настроен)")
+        print(f"Директория клонирования: {self.clone_directory}")
         print("-" * 40)
 
 
 class GitHubRepo:
-    """Manager for GitHub repository operations."""
+    """Менеджер операций с репозиториями GitHub."""
     
     def __init__(self, config):
         self.config = config
     
     def _build_clone_url(self, repo_path):
-        """Build clone URL for a repository (without credentials)."""
+        """Построить URL клонирования для репозитория (без учетных данных)."""
         return f"https://github.com/{repo_path}.git"
     
     def _get_repo_dir(self, repo_path):
-        """Get local directory path for a repository."""
+        """Получить локальный путь к директории репозитория."""
         repo_name = repo_path.split("/")[-1]
         return self.config.clone_directory / repo_name
     
     def clone(self, repo_path, force=False):
         """
-        Clone a private repository.
+        Клонировать приватный репозиторий.
         
         Args:
-            repo_path: Repository path in format 'owner/repo'
-            force: If True, remove existing directory and re-clone
+            repo_path: Путь к репозиторию в формате 'owner/repo'
+            force: Если True, удалить существующую директорию и переклонировать
         
         Returns:
-            Path to cloned repository or None on failure
+            Путь к клонированному репозиторию или None при ошибке
         """
         if "/" not in repo_path:
-            print("Error: Invalid repository format. Use 'owner/repo'")
+            print("Ошибка: Некорректный формат репозитория. Используйте 'owner/repo'")
             return None
         
         repo_dir = self._get_repo_dir(repo_path)
@@ -114,15 +114,15 @@ class GitHubRepo:
         # Check if already cloned
         if repo_dir.exists():
             if force:
-                print(f"Removing existing directory: {repo_dir}")
+                print(f"Удаление существующей директории: {repo_dir}")
                 try:
                     shutil.rmtree(repo_dir)
                 except OSError as e:
-                    print(f"Error removing directory: {e}")
+                    print(f"Ошибка удаления директории: {e}")
                     return None
             else:
-                print(f"Repository already exists at: {repo_dir}")
-                print("Use --force to re-clone or update manually with 'git pull'")
+                print(f"Репозиторий уже существует по адресу: {repo_dir}")
+                print("Используйте --force для переклонирования или обновите вручную с помощью 'git pull'")
                 return repo_dir
         
         # Ensure parent directory exists
@@ -130,7 +130,7 @@ class GitHubRepo:
         
         # Build authenticated URL for cloning
         clone_url = f"https://{self.config.username}:{self.config.token}@github.com/{repo_path}.git"
-        print(f"Cloning {repo_path}...")
+        print(f"Клонирование {repo_path}...")
         
         try:
             # Use subprocess with capture_output to prevent credentials from appearing in output
@@ -144,21 +144,21 @@ class GitHubRepo:
                 # Sanitize error message to remove credentials
                 error_msg = result.stderr.replace(self.config.token, "***")
                 error_msg = error_msg.replace(self.config.username, "***")
-                print(f"Error cloning repository: {error_msg}")
+                print(f"Ошибка клонирования репозитория: {error_msg}")
                 return None
             
             # Remove credentials from remote URL after cloning
             self._sanitize_remote_url(repo_dir, repo_path)
             
-            print(f"Successfully cloned to: {repo_dir}")
+            print(f"Успешно клонировано в: {repo_dir}")
             return repo_dir
             
         except subprocess.SubprocessError as e:
-            print(f"Error: Failed to execute git command: {e}")
+            print(f"Ошибка: Не удалось выполнить команду git: {e}")
             return None
     
     def _sanitize_remote_url(self, repo_dir, repo_path):
-        """Remove credentials from the remote URL in .git/config."""
+        """Удалить учетные данные из URL удаленного репозитория в .git/config."""
         try:
             clean_url = f"https://github.com/{repo_path}.git"
             subprocess.run(
@@ -173,22 +173,22 @@ class GitHubRepo:
     
     def pull(self, repo_path):
         """
-        Pull latest changes for a repository.
+        Получить последние изменения для репозитория.
         
         Args:
-            repo_path: Repository path in format 'owner/repo'
+            repo_path: Путь к репозиторию в формате 'owner/repo'
         
         Returns:
-            True on success, False on failure
+            True при успехе, False при ошибке
         """
         repo_dir = self._get_repo_dir(repo_path)
         
         if not repo_dir.exists():
-            print(f"Error: Repository not found at {repo_dir}")
-            print(f"Clone it first with: mygit clone {repo_path}")
+            print(f"Ошибка: Репозиторий не найден по адресу {repo_dir}")
+            print(f"Сначала клонируйте его с помощью: mygit clone {repo_path}")
             return False
         
-        print(f"Pulling latest changes for {repo_path}...")
+        print(f"Получение последних изменений для {repo_path}...")
         
         try:
             result = subprocess.run(
@@ -199,28 +199,28 @@ class GitHubRepo:
             )
             
             if result.returncode != 0:
-                print(f"Error pulling repository: {result.stderr}")
+                print(f"Ошибка получения изменений репозитория: {result.stderr}")
                 return False
             
             print(result.stdout)
             return True
             
         except subprocess.SubprocessError as e:
-            print(f"Error: Failed to execute git command: {e}")
+            print(f"Ошибка: Не удалось выполнить команду git: {e}")
             return False
     
     def run_script(self, repo_path, script_path, args=None, no_confirm=False):
         """
-        Clone (if needed) and run a shell script from a repository.
+        Клонировать (если необходимо) и запустить shell-скрипт из репозитория.
         
         Args:
-            repo_path: Repository path in format 'owner/repo'
-            script_path: Path to script within the repository
-            args: Additional arguments to pass to the script
-            no_confirm: Skip confirmation prompt
+            repo_path: Путь к репозиторию в формате 'owner/repo'
+            script_path: Путь к скрипту в репозитории
+            args: Дополнительные аргументы для передачи скрипту
+            no_confirm: Пропустить запрос подтверждения
         
         Returns:
-            Exit code of the script
+            Код выхода скрипта
         """
         # Clone if not already present
         repo_dir = self._get_repo_dir(repo_path)
@@ -233,11 +233,11 @@ class GitHubRepo:
         full_script_path = repo_dir / script_path
         
         if not full_script_path.exists():
-            print(f"Error: Script not found: {full_script_path}")
+            print(f"Ошибка: Скрипт не найден: {full_script_path}")
             return 1
         
         if not full_script_path.is_file():
-            print(f"Error: Not a file: {full_script_path}")
+            print(f"Ошибка: Не является файлом: {full_script_path}")
             return 1
         
         # Security check: validate script path is within repository (prevent path traversal)
@@ -245,29 +245,29 @@ class GitHubRepo:
             full_script_path = full_script_path.resolve()
             repo_dir_resolved = repo_dir.resolve()
             if not str(full_script_path).startswith(str(repo_dir_resolved)):
-                print("Error: Script path traversal detected. Operation cancelled.")
+                print("Ошибка: Обнаружен обход пути скрипта. Операция отменена.")
                 return 1
         except (OSError, ValueError) as e:
-            print(f"Error: Invalid script path: {e}")
+            print(f"Ошибка: Некорректный путь к скрипту: {e}")
             return 1
         
         # Require user confirmation before making file executable and running
         if not no_confirm:
-            print(f"\nScript to execute: {full_script_path}")
-            print(f"Repository: {repo_path}")
+            print(f"\nСкрипт для выполнения: {full_script_path}")
+            print(f"Репозиторий: {repo_path}")
             try:
-                confirm = input("\nAre you sure you want to run this script? [y/N]: ").strip().lower()
+                confirm = input("\nВы уверены, что хотите запустить этот скрипт? [y/N]: ").strip().lower()
             except EOFError:
                 confirm = 'n'
             if confirm != 'y':
-                print("Operation cancelled.")
+                print("Операция отменена.")
                 return 0
         
         # Make script executable
         os.chmod(full_script_path, 0o755)
         
         # Run the script
-        print(f"\nRunning script: {script_path}")
+        print(f"\nЗапуск скрипта: {script_path}")
         print("-" * 40)
         
         cmd = [str(full_script_path)]
@@ -278,15 +278,15 @@ class GitHubRepo:
             result = subprocess.run(cmd, cwd=str(repo_dir))
             return result.returncode
         except subprocess.SubprocessError as e:
-            print(f"Error: Failed to execute script: {e}")
+            print(f"Ошибка: Не удалось выполнить скрипт: {e}")
             return 1
     
     def list_repos(self):
-        """List all cloned repositories."""
+        """Список всех клонированных репозиториев."""
         clone_dir = self.config.clone_directory
         
         if not clone_dir.exists():
-            print("No repositories cloned yet.")
+            print("Репозитории еще не клонированы.")
             return []
         
         repos = []
@@ -299,102 +299,103 @@ class GitHubRepo:
                     # Skip directories we can't access
                     continue
         except (PermissionError, OSError) as e:
-            print(f"Error accessing clone directory: {e}")
+            print(f"Ошибка доступа к директории клонирования: {e}")
             return []
         
         if not repos:
-            print("No repositories cloned yet.")
+            print("Репозитории еще не клонированы.")
             return []
         
-        print("\nCloned Repositories:")
+        print("\nКлонированные репозитории:")
         print("-" * 40)
         for repo in sorted(repos):
             repo_path = clone_dir / repo
             print(f"  {repo} ({repo_path})")
         print("-" * 40)
-        print(f"Total: {len(repos)} repository(ies)")
+        print(f"Всего: {len(repos)} репозиториев")
         
         return repos
 
 
 def cmd_clone(args, config):
-    """Handle clone command."""
+    """Обработка команды clone."""
     repo = GitHubRepo(config)
     result = repo.clone(args.repository, force=args.force)
     return 0 if result else 1
 
 
 def cmd_pull(args, config):
-    """Handle pull command."""
+    """Обработка команды pull."""
     repo = GitHubRepo(config)
     result = repo.pull(args.repository)
     return 0 if result else 1
 
 
 def cmd_run(args, config):
-    """Handle run command."""
+    """Обработка команды run."""
     repo = GitHubRepo(config)
     return repo.run_script(args.repository, args.script, args.script_args, args.yes)
 
 
 def cmd_list(args, config):
-    """Handle list command."""
+    """Обработка команды list."""
     repo = GitHubRepo(config)
     repo.list_repos()
     return 0
 
 
 def cmd_config(args, config):
-    """Handle config command."""
+    """Обработка команды config."""
     config.show()
     return 0
 
 
 def main():
-    """Main entry point."""
+    """Главная точка входа."""
     parser = argparse.ArgumentParser(
-        description="MyGit - Private GitHub Repository Connector",
+        description="MyGit - Коннектор приватных репозиториев GitHub",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  mygit clone owner/repo          Clone a private repository
-  mygit clone owner/repo --force  Force re-clone
-  mygit pull owner/repo           Pull latest changes
-  mygit run owner/repo script.sh  Clone and run a script
-  mygit list                      List cloned repositories
-  mygit config                    Show configuration
+
+Примеры:
+  mygit clone owner/repo          Клонировать приватный репозиторий
+  mygit clone owner/repo --force  Принудительно переклонировать
+  mygit pull owner/repo           Получить последние изменения
+  mygit run owner/repo script.sh  Клонировать и запустить скрипт
+  mygit list                      Список клонированных репозиториев
+  mygit config                    Показать конфигурацию
         """
     )
     
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    subparsers = parser.add_subparsers(dest="command", help="Доступные команды")
     
     # Clone command
-    clone_parser = subparsers.add_parser("clone", help="Clone a private repository")
-    clone_parser.add_argument("repository", help="Repository path (owner/repo)")
+    clone_parser = subparsers.add_parser("clone", help="Клонировать приватный репозиторий")
+    clone_parser.add_argument("repository", help="Путь к репозиторию (owner/repo)")
     clone_parser.add_argument("-f", "--force", action="store_true",
-                              help="Force re-clone if exists")
+                              help="Принудительно переклонировать если существует")
     clone_parser.set_defaults(func=cmd_clone)
     
     # Pull command
-    pull_parser = subparsers.add_parser("pull", help="Pull latest changes")
-    pull_parser.add_argument("repository", help="Repository path (owner/repo)")
+    pull_parser = subparsers.add_parser("pull", help="Получить последние изменения")
+    pull_parser.add_argument("repository", help="Путь к репозиторию (owner/repo)")
     pull_parser.set_defaults(func=cmd_pull)
     
     # Run command
-    run_parser = subparsers.add_parser("run", help="Clone and run a script")
-    run_parser.add_argument("repository", help="Repository path (owner/repo)")
-    run_parser.add_argument("script", help="Path to script in repository")
-    run_parser.add_argument("script_args", nargs="*", help="Arguments for the script")
+    run_parser = subparsers.add_parser("run", help="Клонировать и запустить скрипт")
+    run_parser.add_argument("repository", help="Путь к репозиторию (owner/repo)")
+    run_parser.add_argument("script", help="Путь к скрипту в репозитории")
+    run_parser.add_argument("script_args", nargs="*", help="Аргументы для скрипта")
     run_parser.add_argument("-y", "--yes", action="store_true",
-                            help="Skip confirmation prompt")
+                            help="Пропустить запрос подтверждения")
     run_parser.set_defaults(func=cmd_run)
     
     # List command
-    list_parser = subparsers.add_parser("list", help="List cloned repositories")
+    list_parser = subparsers.add_parser("list", help="Список клонированных репозиториев")
     list_parser.set_defaults(func=cmd_list)
     
     # Config command
-    config_parser = subparsers.add_parser("config", help="Show configuration")
+    config_parser = subparsers.add_parser("config", help="Показать конфигурацию")
     config_parser.set_defaults(func=cmd_config)
     
     args = parser.parse_args()
