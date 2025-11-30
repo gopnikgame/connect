@@ -15,6 +15,10 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# GitHub repository settings
+GITHUB_REPO="gopnikgame/connect"
+GITHUB_BRANCH="main"
+
 # Installation paths
 INSTALL_DIR="/opt/mygit"
 CONFIG_DIR="$HOME/.mygit"
@@ -73,6 +77,11 @@ check_dependencies() {
     
     if ! command -v pip3 >/dev/null 2>&1; then
         missing_deps="$missing_deps python3-pip"
+        need_update=1
+    fi
+    
+    if ! command -v wget >/dev/null 2>&1 && ! command -v curl >/dev/null 2>&1; then
+        missing_deps="$missing_deps wget"
         need_update=1
     fi
     
@@ -163,21 +172,66 @@ EOF
     print_msg "$GREEN" "Конфигурация сохранена в $CONFIG_FILE"
 }
 
+# Download mygit.py from GitHub
+download_mygit() {
+    local url="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/mygit.py"
+    local temp_file="/tmp/mygit.py"
+    
+    print_msg "$BLUE" "Загрузка mygit.py из GitHub..."
+    
+    # Try wget first, fallback to curl
+    if command -v wget >/dev/null 2>&1; then
+        if ! wget -q -O "$temp_file" "$url"; then
+            print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py с GitHub."
+            print_msg "$YELLOW" "URL: $url"
+            exit 1
+        fi
+    elif command -v curl >/dev/null 2>&1; then
+        if ! curl -sS -o "$temp_file" "$url"; then
+            print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py с GitHub."
+            print_msg "$YELLOW" "URL: $url"
+            exit 1
+        fi
+    else
+        print_msg "$RED" "Ошибка: Нет wget или curl для загрузки файла."
+        exit 1
+    fi
+    
+    echo "$temp_file"
+}
+
 install_program() {
     print_msg "$BLUE" "Установка MyGit..."
     
     mkdir -p "$INSTALL_DIR"
     
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+    local mygit_source=""
     
+    # Check if mygit.py exists locally
     if [ -f "$SCRIPT_DIR/mygit.py" ]; then
-        cp "$SCRIPT_DIR/mygit.py" "$INSTALL_DIR/mygit.py"
-        chmod +x "$INSTALL_DIR/mygit.py"
+        print_msg "$GREEN" "Используется локальный файл mygit.py"
+        mygit_source="$SCRIPT_DIR/mygit.py"
     else
-        print_msg "$RED" "Ошибка: mygit.py не найден в $SCRIPT_DIR"
+        print_msg "$YELLOW" "Локальный файл mygit.py не найден, загрузка из GitHub..."
+        mygit_source=$(download_mygit)
+    fi
+    
+    # Copy to installation directory
+    if [ -f "$mygit_source" ]; then
+        cp "$mygit_source" "$INSTALL_DIR/mygit.py"
+        chmod +x "$INSTALL_DIR/mygit.py"
+        
+        # Clean up temp file if it was downloaded
+        if [ "$mygit_source" = "/tmp/mygit.py" ]; then
+            rm -f "$mygit_source"
+        fi
+    else
+        print_msg "$RED" "Ошибка: Не удалось найти mygit.py"
         exit 1
     fi
     
+    # Create symbolic link
     if [ -L "$BIN_LINK" ] || [ -e "$BIN_LINK" ]; then
         rm -f "$BIN_LINK"
     fi
