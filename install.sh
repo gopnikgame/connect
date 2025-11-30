@@ -39,16 +39,19 @@ print_header() {
 
 # Check if running as root for system-wide installation
 check_permissions() {
-    if [[ $EUID -ne 0 ]]; then
+    if [ "$EUID" -ne 0 ]; then
         print_msg "$YELLOW" "Внимание: Скрипт запущен без прав root. Будет выполнена локальная установка."
         INSTALL_DIR="$HOME/.local/share/mygit"
         BIN_LINK="$HOME/.local/bin/mygit"
         mkdir -p "$HOME/.local/bin"
         # Add to PATH if not already there
-        if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-            print_msg "$YELLOW" "Добавление $HOME/.local/bin в PATH в ~/.bashrc"
-            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-        fi
+        case ":$PATH:" in
+            *":$HOME/.local/bin:"*) ;;
+            *)
+                print_msg "$YELLOW" "Добавление $HOME/.local/bin в PATH в ~/.bashrc"
+                echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+                ;;
+        esac
     fi
 }
 
@@ -56,27 +59,27 @@ check_permissions() {
 check_dependencies() {
     print_msg "$BLUE" "Проверка зависимостей..."
     
-    local missing_deps=()
+    missing_deps=""
     
     # Check for git
-    if ! command -v git &> /dev/null; then
-        missing_deps+=("git")
+    if ! command -v git >/dev/null 2>&1; then
+        missing_deps="$missing_deps git"
     fi
     
     # Check for python3
-    if ! command -v python3 &> /dev/null; then
-        missing_deps+=("python3")
+    if ! command -v python3 >/dev/null 2>&1; then
+        missing_deps="$missing_deps python3"
     fi
     
     # Check for pip3
-    if ! command -v pip3 &> /dev/null; then
-        missing_deps+=("python3-pip")
+    if ! command -v pip3 >/dev/null 2>&1; then
+        missing_deps="$missing_deps python3-pip"
     fi
     
-    if [ ${#missing_deps[@]} -ne 0 ]; then
-        print_msg "$RED" "Отсутствуют зависимости: ${missing_deps[*]}"
+    if [ -n "$missing_deps" ]; then
+        print_msg "$RED" "Отсутствуют зависимости:$missing_deps"
         print_msg "$YELLOW" "Пожалуйста, установите их используя:"
-        print_msg "$YELLOW" "  sudo apt update && sudo apt install -y ${missing_deps[*]}"
+        print_msg "$YELLOW" "  sudo apt update && sudo apt install -y$missing_deps"
         exit 1
     fi
     
@@ -89,8 +92,9 @@ get_credentials() {
     echo ""
     
     # GitHub username
-    read -p "Введите ваше имя пользователя GitHub: " github_username
-    if [[ -z "$github_username" ]]; then
+    printf "Введите ваше имя пользователя GitHub: "
+    read github_username
+    if [ -z "$github_username" ]; then
         print_msg "$RED" "Ошибка: Имя пользователя GitHub не может быть пустым."
         exit 1
     fi
@@ -100,18 +104,24 @@ get_credentials() {
     print_msg "$YELLOW" "Вам необходим GitHub Personal Access Token (PAT) с правами 'repo'."
     print_msg "$YELLOW" "Создайте его на: https://github.com/settings/tokens"
     echo ""
-    read -sp "Введите ваш GitHub Personal Access Token: " github_token
+    printf "Введите ваш GitHub Personal Access Token: "
+    stty -echo
+    read github_token
+    stty echo
     echo ""
     
-    if [[ -z "$github_token" ]]; then
+    if [ -z "$github_token" ]; then
         print_msg "$RED" "Ошибка: Токен GitHub не может быть пустым."
         exit 1
     fi
     
     # Default clone directory
     echo ""
-    read -p "Введите директорию по умолчанию для клонирования репозиториев [$HOME/mygit-repos]: " clone_dir
-    clone_dir=${clone_dir:-"$HOME/mygit-repos"}
+    printf "Введите директорию по умолчанию для клонирования репозиториев [$HOME/mygit-repos]: "
+    read clone_dir
+    if [ -z "$clone_dir" ]; then
+        clone_dir="$HOME/mygit-repos"
+    fi
 }
 
 # Save configuration
@@ -126,26 +136,18 @@ save_config() {
     mkdir -p "$clone_dir"
     
     # Save config as JSON using Python for proper escaping
-    # Pass sensitive data via stdin to avoid exposure in process list
-    python3 << PYTHON_SCRIPT
+    python3 -c "
 import json
-import sys
-
-# Read sensitive data from heredoc
-github_username = "${github_username//\"/\\\"}"
-github_token = """${github_token//\"/\\\"}"""
-clone_dir = "${clone_dir//\"/\\\"}"
-config_file = "${CONFIG_FILE//\"/\\\"}"
 
 config = {
-    'github_username': github_username,
-    'github_token': github_token,
-    'clone_directory': clone_dir
+    'github_username': '''$github_username''',
+    'github_token': '''$github_token''',
+    'clone_directory': '''$clone_dir'''
 }
 
-with open(config_file, 'w') as f:
+with open('$CONFIG_FILE', 'w') as f:
     json.dump(config, f, indent=4)
-PYTHON_SCRIPT
+"
     
     # Secure the config file
     chmod 600 "$CONFIG_FILE"
@@ -160,11 +162,11 @@ install_program() {
     # Create installation directory
     mkdir -p "$INSTALL_DIR"
     
-    # Get the directory where install.sh is located using realpath for robustness
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+    # Get the directory where install.sh is located
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
     
     # Copy the Python program
-    if [[ -f "$SCRIPT_DIR/mygit.py" ]]; then
+    if [ -f "$SCRIPT_DIR/mygit.py" ]; then
         cp "$SCRIPT_DIR/mygit.py" "$INSTALL_DIR/mygit.py"
         chmod +x "$INSTALL_DIR/mygit.py"
     else
@@ -173,7 +175,7 @@ install_program() {
     fi
     
     # Create symlink
-    if [[ -L "$BIN_LINK" ]] || [[ -e "$BIN_LINK" ]]; then
+    if [ -L "$BIN_LINK" ] || [ -e "$BIN_LINK" ]; then
         rm -f "$BIN_LINK"
     fi
     ln -s "$INSTALL_DIR/mygit.py" "$BIN_LINK"
@@ -196,7 +198,7 @@ print_usage() {
     echo "  mygit config                 - Показать текущую конфигурацию"
     echo "  mygit help                   - Показать справку"
     echo ""
-    if [[ $EUID -ne 0 ]]; then
+    if [ "$EUID" -ne 0 ]; then
         print_msg "$YELLOW" "Примечание: Вам может потребоваться перезапустить терминал или выполнить:"
         print_msg "$YELLOW" "  source ~/.bashrc"
         print_msg "$YELLOW" "чтобы использовать команду 'mygit'."
