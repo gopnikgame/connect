@@ -197,15 +197,15 @@ download_mygit() {
     local url="https://raw.githubusercontent.com/${GITHUB_REPO}/refs/heads/${GITHUB_BRANCH}/mygit.py"
     local temp_file="/tmp/mygit_$$.py"
     
-    print_msg "$BLUE" "Загрузка mygit.py из GitHub..."
-    print_msg "$YELLOW" "URL: $url"
+    print_msg "$BLUE" "Загрузка mygit.py из GitHub..." >&2
+    print_msg "$YELLOW" "URL: $url" >&2
     
     # Remove any existing temp file
     rm -f "$temp_file" 2>/dev/null
     
     # Try wget first
     if command -v wget >/dev/null 2>&1; then
-        print_msg "$BLUE" "Используется wget для загрузки..."
+        print_msg "$BLUE" "Используется wget для загрузки..." >&2
         
         # Download with verbose output redirected
         if wget -q -O "$temp_file" "$url"; then
@@ -215,24 +215,24 @@ download_mygit() {
                 local first_line=$(head -n 1 "$temp_file")
                 if echo "$first_line" | grep -q "python"; then
                     local file_size=$(stat -f%z "$temp_file" 2>/dev/null || stat -c%s "$temp_file" 2>/dev/null)
-                    print_msg "$GREEN" "Файл успешно загружен ($file_size байт)"
+                    print_msg "$GREEN" "Файл успешно загружен ($file_size байт)" >&2
                     echo "$temp_file"
                     return 0
                 else
-                    print_msg "$YELLOW" "Предупреждение: Загружен не Python файл"
-                    print_msg "$YELLOW" "Первая строка: $first_line"
+                    print_msg "$YELLOW" "Предупреждение: Загружен не Python файл" >&2
+                    print_msg "$YELLOW" "Первая строка: $first_line" >&2
                 fi
             else
-                print_msg "$YELLOW" "Файл пустой или не создан"
+                print_msg "$YELLOW" "Файл пустой или не создан" >&2
             fi
         else
-            print_msg "$YELLOW" "wget вернул ошибку: $?"
+            print_msg "$YELLOW" "wget вернул ошибку: $?" >&2
         fi
     fi
     
     # Try curl as fallback
     if command -v curl >/dev/null 2>&1; then
-        print_msg "$BLUE" "Используется curl для загрузки..."
+        print_msg "$BLUE" "Используется curl для загрузки..." >&2
         
         # Download with curl
         if curl -sSL -o "$temp_file" "$url"; then
@@ -242,32 +242,32 @@ download_mygit() {
                 local first_line=$(head -n 1 "$temp_file")
                 if echo "$first_line" | grep -q "python"; then
                     local file_size=$(stat -f%z "$temp_file" 2>/dev/null || stat -c%s "$temp_file" 2>/dev/null)
-                    print_msg "$GREEN" "Файл успешно загружен ($file_size байт)"
+                    print_msg "$GREEN" "Файл успешно загружен ($file_size байт)" >&2
                     echo "$temp_file"
                     return 0
                 else
-                    print_msg "$YELLOW" "Предупреждение: Загружен не Python файл"
-                    print_msg "$YELLOW" "Первая строка: $first_line"
+                    print_msg "$YELLOW" "Предупреждение: Загружен не Python файл" >&2
+                    print_msg "$YELLOW" "Первая строка: $first_line" >&2
                 fi
             else
-                print_msg "$YELLOW" "Файл пустой или не создан"
+                print_msg "$YELLOW" "Файл пустой или не создан" >&2
             fi
         else
-            print_msg "$YELLOW" "curl вернул ошибку: $?"
+            print_msg "$YELLOW" "curl вернул ошибку: $?" >&2
         fi
     fi
     
     # If we got here, download failed
     rm -f "$temp_file" 2>/dev/null
-    print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py с GitHub."
-    print_msg "$YELLOW" ""
-    print_msg "$YELLOW" "Возможные причины:"
-    print_msg "$YELLOW" "  1. Нет подключения к интернету"
-    print_msg "$YELLOW" "  2. GitHub недоступен"
-    print_msg "$YELLOW" "  3. Файл не существует в репозитории"
-    print_msg "$YELLOW" ""
-    print_msg "$YELLOW" "Диагностика:"
-    print_msg "$YELLOW" "  Попробуйте вручную: curl -I $url"
+    print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py с GitHub." >&2
+    print_msg "$YELLOW" "" >&2
+    print_msg "$YELLOW" "Возможные причины:" >&2
+    print_msg "$YELLOW" "  1. Нет подключения к интернету" >&2
+    print_msg "$YELLOW" "  2. GitHub недоступен" >&2
+    print_msg "$YELLOW" "  3. Файл не существует в репозитории" >&2
+    print_msg "$YELLOW" "" >&2
+    print_msg "$YELLOW" "Диагностика:" >&2
+    print_msg "$YELLOW" "  Попробуйте вручную: curl -I $url" >&2
     
     return 1
 }
