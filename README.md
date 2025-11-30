@@ -1,7 +1,11 @@
 # MyGit - Connect
 
 Скрипт для подключения приватных репозиториев GitHub. 
+## ⚡ Быстрая установка
 
+```bash
+wget -qO install.sh https://raw.githubusercontent.com/gopnikgame/connect/main/install.sh && chmod +x install.sh && sudo ./install.sh
+```
 Инструмент позволяет:
 - Подключаться к приватным репозиториям GitHub
 - Клонировать репозитории с аутентификацией
