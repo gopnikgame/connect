@@ -133,7 +133,7 @@ class GitHubRepo:
         print(f"Клонирование {repo_path}...")
         
         try:
-            # Use subprocess with capture_output to prevent credentials from appearing in output
+            # User subprocess with capture_output to prevent credentials from appearing in output
             result = subprocess.run(
                 ["git", "clone", clone_url, str(repo_dir)],
                 capture_output=True,
@@ -263,14 +263,18 @@ class GitHubRepo:
                 print("Операция отменена.")
                 return 0
         
-        # Make script executable
-        os.chmod(full_script_path, 0o755)
+        # Make script executable (optional, since we'll use bash explicitly)
+        try:
+            os.chmod(full_script_path, 0o755)
+        except OSError:
+            pass
         
-        # Run the script
+        # Run the script using bash explicitly
         print(f"\nЗапуск скрипта: {script_path}")
         print("-" * 40)
         
-        cmd = [str(full_script_path)]
+        # Use bash to execute the script to handle missing shebang and line ending issues
+        cmd = ["bash", str(full_script_path)]
         if args:
             cmd.extend(args)
         
