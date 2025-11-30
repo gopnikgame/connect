@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+﻿#!/usr/bin/env bash
 
 # =============================================================================
 # MyGit Installer Script
@@ -25,7 +25,7 @@ BIN_LINK="/usr/local/bin/mygit"
 print_msg() {
     local color=$1
     local msg=$2
-    echo -e "${color}${msg}${NC}"
+    printf "${color}${msg}${NC}\n"
 }
 
 # Print header
@@ -39,7 +39,7 @@ print_header() {
 
 # Check if running as root for system-wide installation
 check_permissions() {
-    if [ "$EUID" -ne 0 ]; then
+    if [ "$(id -u)" -ne 0 ]; then
         print_msg "$YELLOW" "Внимание: Скрипт запущен без прав root. Будет выполнена локальная установка."
         INSTALL_DIR="$HOME/.local/share/mygit"
         BIN_LINK="$HOME/.local/bin/mygit"
@@ -54,32 +54,58 @@ check_permissions() {
     fi
 }
 
-# Остальной код без изменений...
+# Check and install dependencies
 check_dependencies() {
     print_msg "$BLUE" "Проверка зависимостей..."
     
-    missing_deps=""
+    local missing_deps=""
+    local need_update=0
     
     if ! command -v git >/dev/null 2>&1; then
         missing_deps="$missing_deps git"
+        need_update=1
     fi
     
     if ! command -v python3 >/dev/null 2>&1; then
         missing_deps="$missing_deps python3"
+        need_update=1
     fi
     
     if ! command -v pip3 >/dev/null 2>&1; then
         missing_deps="$missing_deps python3-pip"
+        need_update=1
     fi
     
     if [ -n "$missing_deps" ]; then
-        print_msg "$RED" "Отсутствуют зависимости:$missing_deps"
-        print_msg "$YELLOW" "Пожалуйста, установите их используя:"
-        print_msg "$YELLOW" "  sudo apt update && sudo apt install -y$missing_deps"
-        exit 1
+        print_msg "$YELLOW" "Отсутствуют зависимости:$missing_deps"
+        
+        # Auto-install if running as root
+        if [ "$(id -u)" -eq 0 ]; then
+            print_msg "$BLUE" "Установка зависимостей..."
+            
+            # Update package list
+            if ! apt-get update >/dev/null 2>&1; then
+                print_msg "$RED" "Ошибка: Не удалось обновить список пакетов."
+                print_msg "$YELLOW" "Попробуйте выполнить вручную: sudo apt-get update"
+                exit 1
+            fi
+            
+            # Install missing dependencies
+            if ! apt-get install -y $missing_deps; then
+                print_msg "$RED" "Ошибка: Не удалось установить зависимости."
+                print_msg "$YELLOW" "Попробуйте выполнить вручную: sudo apt-get install -y$missing_deps"
+                exit 1
+            fi
+            
+            print_msg "$GREEN" "Зависимости успешно установлены."
+        else
+            print_msg "$YELLOW" "Пожалуйста, установите их используя:"
+            print_msg "$YELLOW" "  sudo apt-get update && sudo apt-get install -y$missing_deps"
+            exit 1
+        fi
+    else
+        print_msg "$GREEN" "Все зависимости установлены."
     fi
-    
-    print_msg "$GREEN" "Все зависимости установлены."
 }
 
 get_credentials() {
@@ -98,9 +124,9 @@ get_credentials() {
     print_msg "$YELLOW" "Создайте его на: https://github.com/settings/tokens"
     echo ""
     printf "Введите ваш GitHub Personal Access Token: "
-    stty -echo
+    stty -echo 2>/dev/null || true
     read github_token
-    stty echo
+    stty echo 2>/dev/null || true
     echo ""
     
     if [ -z "$github_token" ]; then
@@ -124,18 +150,13 @@ save_config() {
     
     mkdir -p "$clone_dir"
     
-    python3 -c "
-import json
-
-config = {
-    'github_username': '''$github_username''',
-    'github_token': '''$github_token''',
-    'clone_directory': '''$clone_dir'''
+    cat > "$CONFIG_FILE" << EOF
+{
+    "github_username": "$github_username",
+    "github_token": "$github_token",
+    "clone_directory": "$clone_dir"
 }
-
-with open('$CONFIG_FILE', 'w') as f:
-    json.dump(config, f, indent=4)
-"
+EOF
     
     chmod 600 "$CONFIG_FILE"
     
@@ -177,9 +198,9 @@ print_usage() {
     echo "  mygit run <owner/repo> <script.sh> - Клонировать и запустить скрипт"
     echo "  mygit list                   - Список клонированных репозиториев"
     echo "  mygit config                 - Показать текущую конфигурацию"
-    echo "  mygit help                   - Показать справку"
+    echo "  mygit --help                 - Показать справку"
     echo ""
-    if [ "$EUID" -ne 0 ]; then
+    if [ "$(id -u)" -ne 0 ]; then
         print_msg "$YELLOW" "Примечание: Вам может потребоваться перезапустить терминал или выполнить:"
         print_msg "$YELLOW" "  source ~/.bashrc"
         print_msg "$YELLOW" "чтобы использовать команду 'mygit'."

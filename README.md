@@ -1,11 +1,19 @@
-# MyGit - Connect
+﻿# MyGit - Connect
 
 Скрипт для подключения приватных репозиториев GitHub. 
+
 ## ⚡ Быстрая установка
 
 ```bash
-wget -qO install.sh https://raw.githubusercontent.com/gopnikgame/connect/main/install.sh && chmod +x install.sh && sudo ./install.sh
+wget -qO- https://raw.githubusercontent.com/gopnikgame/connect/main/install.sh | sudo bash
 ```
+
+**Или с сохранением файла:**
+
+```bash
+wget -qO install.sh https://raw.githubusercontent.com/gopnikgame/connect/main/install.sh && sudo bash install.sh
+```
+
 Инструмент позволяет:
 - Подключаться к приватным репозиториям GitHub
 - Клонировать репозитории с аутентификацией
@@ -14,8 +22,8 @@ wget -qO install.sh https://raw.githubusercontent.com/gopnikgame/connect/main/in
 ## Требования
 
 - Ubuntu Server (или другой дистрибутив на базе Debian)
-- Python 3.6+
-- Git
+- Git (устанавливается автоматически)
+- Python 3.6+ (устанавливается автоматически)
 - GitHub Personal Access Token (PAT) с правами `repo`
 
 ## Установка
@@ -30,11 +38,11 @@ cd connect
 ### 2. Запуск установщика
 
 ```bash
-# Для системной установки (требует sudo)
-sudo ./install.sh
+# Для системной установки (требует sudo, автоматически установит зависимости)
+sudo bash install.sh
 
 # Для локальной установки (в домашнюю директорию)
-./install.sh
+bash install.sh
 ```
 
 При установке будет запрошено:
@@ -77,6 +85,9 @@ mygit run owner/repository script.sh
 
 # С аргументами для скрипта
 mygit run owner/repository scripts/deploy.sh --env production
+
+# Без подтверждения (автоматический запуск)
+mygit run owner/repository script.sh --yes
 ```
 
 ### Список клонированных репозиториев
@@ -94,7 +105,6 @@ mygit config
 ### Справка
 
 ```bash
-mygit help
 mygit --help
 mygit clone --help
 ```
