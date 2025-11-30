@@ -4,7 +4,7 @@
 # MyGit Installer Script
 # Скрипт установки коннектора приватных репозиториев
 # Разработан для операционных систем Ubuntu server
-# =============================================================================
+# ==============================================================================
 
 set -e
 
@@ -179,7 +179,8 @@ save_config() {
     
     mkdir -p "$clone_dir"
     
-    cat >> "$CONFIG_FILE" << EOF
+    # Overwrite config file (not append)
+    cat > "$CONFIG_FILE" << EOF
 {
     "github_username": "$github_username",
     "github_token": "$github_token",
@@ -197,8 +198,11 @@ download_mygit() {
     local url="https://raw.githubusercontent.com/${GITHUB_REPO}/refs/heads/${GITHUB_BRANCH}/mygit.py"
     local temp_file="/tmp/mygit_$$.py"
     
-    print_msg "$BLUE" "Загрузка mygit.py из GitHub..." >&2
-    print_msg "$YELLOW" "URL: $url" >&2
+    # All output to stderr
+    {
+        print_msg "$BLUE" "Загрузка mygit.py из GitHub..."
+        print_msg "$YELLOW" "URL: $url"
+    } >&2
     
     # Remove any existing temp file
     rm -f "$temp_file" 2>/dev/null
@@ -216,6 +220,7 @@ download_mygit() {
                 if echo "$first_line" | grep -q "python"; then
                     local file_size=$(stat -f%z "$temp_file" 2>/dev/null || stat -c%s "$temp_file" 2>/dev/null)
                     print_msg "$GREEN" "Файл успешно загружен ($file_size байт)" >&2
+                    # Only output the file path to stdout
                     echo "$temp_file"
                     return 0
                 else
@@ -243,6 +248,7 @@ download_mygit() {
                 if echo "$first_line" | grep -q "python"; then
                     local file_size=$(stat -f%z "$temp_file" 2>/dev/null || stat -c%s "$temp_file" 2>/dev/null)
                     print_msg "$GREEN" "Файл успешно загружен ($file_size байт)" >&2
+                    # Only output the file path to stdout
                     echo "$temp_file"
                     return 0
                 else
@@ -259,15 +265,17 @@ download_mygit() {
     
     # If we got here, download failed
     rm -f "$temp_file" 2>/dev/null
-    print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py с GitHub." >&2
-    print_msg "$YELLOW" "" >&2
-    print_msg "$YELLOW" "Возможные причины:" >&2
-    print_msg "$YELLOW" "  1. Нет подключения к интернету" >&2
-    print_msg "$YELLOW" "  2. GitHub недоступен" >&2
-    print_msg "$YELLOW" "  3. Файл не существует в репозитории" >&2
-    print_msg "$YELLOW" "" >&2
-    print_msg "$YELLOW" "Диагностика:" >&2
-    print_msg "$YELLOW" "  Попробуйте вручную: curl -I $url" >&2
+    {
+        print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py с GitHub."
+        print_msg "$YELLOW" ""
+        print_msg "$YELLOW" "Возможные причины:"
+        print_msg "$YELLOW" "  1. Нет подключения к интернету"
+        print_msg "$YELLOW" "  2. GitHub недоступен"
+        print_msg "$YELLOW" "  3. Файл не существует в репозитории"
+        print_msg "$YELLOW" ""
+        print_msg "$YELLOW" "Диагностика:"
+        print_msg "$YELLOW" "  Попробуйте вручную: curl -I $url"
+    } >&2
     
     return 1
 }
@@ -292,6 +300,10 @@ install_program() {
         mygit_source=$(download_mygit)
         download_status=$?
         
+        # Debug output
+        print_msg "$BLUE" "Debug: download_status=$download_status" >&2
+        print_msg "$BLUE" "Debug: mygit_source='$mygit_source'" >&2
+        
         # Check if download was successful
         if [ $download_status -ne 0 ]; then
             print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py (код: $download_status)"
@@ -307,13 +319,23 @@ install_program() {
             exit 1
         fi
         
-        # Verify the downloaded file
-        if [ -z "$mygit_source" ] || [ ! -f "$mygit_source" ] || [ ! -s "$mygit_source" ]; then
-            print_msg "$RED" "Ошибка: Загруженный файл недействителен"
-            print_msg "$YELLOW" "Источник: '$mygit_source'"
-            [ -f "$mygit_source" ] && print_msg "$YELLOW" "Размер: $(wc -c < "$mygit_source") байт"
+        # Verify the downloaded file path
+        if [ -z "$mygit_source" ]; then
+            print_msg "$RED" "Ошибка: Путь к файлу пустой"
             exit 1
         fi
+        
+        if [ ! -f "$mygit_source" ]; then
+            print_msg "$RED" "Ошибка: Файл не существует: $mygit_source"
+            exit 1
+        fi
+        
+        if [ ! -s "$mygit_source" ]; then
+            print_msg "$RED" "Ошибка: Файл пустой: $mygit_source"
+            exit 1
+        fi
+        
+        print_msg "$GREEN" "Файл найден: $mygit_source ($(wc -c < "$mygit_source") байт)"
     fi
     
     # Verify it's a Python file
@@ -324,7 +346,7 @@ install_program() {
     fi
     
     # Copy to installation directory
-    print_msg "$BLUE" "Копирование в $INSTALL_DIR..."
+    print_msg "$BLUE" "Копирование $mygit_source в $INSTALL_DIR..."
     if ! cp "$mygit_source" "$INSTALL_DIR/mygit.py"; then
         print_msg "$RED" "Ошибка: Не удалось скопировать файл"
         exit 1
@@ -349,7 +371,9 @@ install_program() {
     fi
     
     print_msg "$GREEN" "MyGit успешно установлен!"
-    print_msg "$GREEN" "Символическая ссылка создана: $BIN_LINK"
+    print_msg "$GREEN" "Файл программы: $INSTALL_DIR/mygit.py"
+    print_msg "$GREEN" "Символическая ссылка: $BIN_LINK"
+    print_msg "$GREEN" "Конфигурация: $CONFIG_FILE"
     
     # Verify installation
     if [ -x "$BIN_LINK" ]; then
