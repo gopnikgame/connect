@@ -1,11 +1,20 @@
 ﻿# MyGit - Connect
 
 Скрипт для подключения приватных репозиториев GitHub. 
-## ⚡ Быстрая установка
+## ⚡ Быстрая установка (одна команда)
 
 ```bash
-wget -qO install.sh https://raw.githubusercontent.com/gopnikgame/connect/main/install.sh && chmod +x install.sh && sudo ./install.sh
+wget -qO- https://raw.githubusercontent.com/gopnikgame/connect/refs/heads/main/install.sh | sudo bash
 ```
+
+**Или с сохранением файла установщика:**
+
+```bash
+wget -qO install.sh https://raw.githubusercontent.com/gopnikgame/connect/refs/heads/main/install.sh && sudo bash install.sh
+```
+
+> **Примечание:** Скрипт автоматически загрузит `mygit.py` из GitHub и установит все необходимые зависимости.
+
 Инструмент позволяет:
 - Подключаться к приватным репозиториям GitHub
 - Клонировать репозитории с аутентификацией

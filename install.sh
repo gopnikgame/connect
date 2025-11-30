@@ -194,7 +194,7 @@ EOF
 
 # Download mygit.py from GitHub
 download_mygit() {
-    local url="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/mygit.py"
+    local url="https://raw.githubusercontent.com/${GITHUB_REPO}/refs/heads/${GITHUB_BRANCH}/mygit.py"
     local temp_file="/tmp/mygit_$$.py"
     
     print_msg "$BLUE" "Загрузка mygit.py из GitHub..."
@@ -302,7 +302,7 @@ install_program() {
             print_msg "$YELLOW" "     cd connect && sudo bash install.sh"
             print_msg "$YELLOW" ""
             print_msg "$YELLOW" "  2. Скачайте файл вручную:"
-            print_msg "$YELLOW" "     wget https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/mygit.py"
+            print_msg "$YELLOW" "     wget https://raw.githubusercontent.com/${GITHUB_REPO}/refs/heads/${GITHUB_BRANCH}/mygit.py"
             print_msg "$YELLOW" "     sudo bash install.sh"
             exit 1
         fi
