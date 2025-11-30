@@ -126,19 +126,26 @@ save_config() {
     mkdir -p "$clone_dir"
     
     # Save config as JSON using Python for proper escaping
-    python3 -c "
+    # Pass sensitive data via stdin to avoid exposure in process list
+    python3 << PYTHON_SCRIPT
 import json
 import sys
 
+# Read sensitive data from heredoc
+github_username = "${github_username//\"/\\\"}"
+github_token = """${github_token//\"/\\\"}"""
+clone_dir = "${clone_dir//\"/\\\"}"
+config_file = "${CONFIG_FILE//\"/\\\"}"
+
 config = {
-    'github_username': sys.argv[1],
-    'github_token': sys.argv[2],
-    'clone_directory': sys.argv[3]
+    'github_username': github_username,
+    'github_token': github_token,
+    'clone_directory': clone_dir
 }
 
-with open(sys.argv[4], 'w') as f:
+with open(config_file, 'w') as f:
     json.dump(config, f, indent=4)
-" "$github_username" "$github_token" "$clone_dir" "$CONFIG_FILE"
+PYTHON_SCRIPT
     
     # Secure the config file
     chmod 600 "$CONFIG_FILE"
@@ -153,8 +160,8 @@ install_program() {
     # Create installation directory
     mkdir -p "$INSTALL_DIR"
     
-    # Get the directory where install.sh is located
-    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    # Get the directory where install.sh is located using realpath for robustness
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
     
     # Copy the Python program
     if [[ -f "$SCRIPT_DIR/mygit.py" ]]; then

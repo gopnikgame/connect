@@ -89,12 +89,6 @@ class GitHubRepo:
         """Build clone URL for a repository (without credentials)."""
         return f"https://github.com/{repo_path}.git"
     
-    def _get_git_env(self):
-        """Get environment variables for git with credentials."""
-        env = os.environ.copy()
-        # Use GIT_ASKPASS to provide credentials securely
-        return env
-    
     def _get_repo_dir(self, repo_path):
         """Get local directory path for a repository."""
         repo_name = repo_path.split("/")[-1]
@@ -191,7 +185,7 @@ class GitHubRepo:
         
         if not repo_dir.exists():
             print(f"Error: Repository not found at {repo_dir}")
-            print("Clone it first with: mygit clone {repo_path}")
+            print(f"Clone it first with: mygit clone {repo_path}")
             return False
         
         print(f"Pulling latest changes for {repo_path}...")
@@ -295,7 +289,18 @@ class GitHubRepo:
             print("No repositories cloned yet.")
             return []
         
-        repos = [d.name for d in clone_dir.iterdir() if d.is_dir() and (d / ".git").exists()]
+        repos = []
+        try:
+            for d in clone_dir.iterdir():
+                try:
+                    if d.is_dir() and (d / ".git").exists():
+                        repos.append(d.name)
+                except (PermissionError, OSError):
+                    # Skip directories we can't access
+                    continue
+        except (PermissionError, OSError) as e:
+            print(f"Error accessing clone directory: {e}")
+            return []
         
         if not repos:
             print("No repositories cloned yet.")
