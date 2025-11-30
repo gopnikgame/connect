@@ -200,32 +200,75 @@ download_mygit() {
     print_msg "$BLUE" "Загрузка mygit.py из GitHub..."
     print_msg "$YELLOW" "URL: $url"
     
-    # Try wget first, fallback to curl
+    # Remove any existing temp file
+    rm -f "$temp_file" 2>/dev/null
+    
+    # Try wget first
     if command -v wget >/dev/null 2>&1; then
-        if wget -q -O "$temp_file" "$url" 2>/dev/null; then
+        print_msg "$BLUE" "Используется wget для загрузки..."
+        
+        # Download with verbose output redirected
+        if wget -q -O "$temp_file" "$url"; then
+            # Check if file exists and has content
             if [ -f "$temp_file" ] && [ -s "$temp_file" ]; then
-                print_msg "$GREEN" "Файл успешно загружен"
-                echo "$temp_file"
-                return 0
+                # Verify it's a Python script (check shebang)
+                local first_line=$(head -n 1 "$temp_file")
+                if echo "$first_line" | grep -q "python"; then
+                    local file_size=$(stat -f%z "$temp_file" 2>/dev/null || stat -c%s "$temp_file" 2>/dev/null)
+                    print_msg "$GREEN" "Файл успешно загружен ($file_size байт)"
+                    echo "$temp_file"
+                    return 0
+                else
+                    print_msg "$YELLOW" "Предупреждение: Загружен не Python файл"
+                    print_msg "$YELLOW" "Первая строка: $first_line"
+                fi
+            else
+                print_msg "$YELLOW" "Файл пустой или не создан"
             fi
+        else
+            print_msg "$YELLOW" "wget вернул ошибку: $?"
         fi
-    elif command -v curl >/dev/null 2>&1; then
-        if curl -sSf -o "$temp_file" "$url" 2>/dev/null; then
+    fi
+    
+    # Try curl as fallback
+    if command -v curl >/dev/null 2>&1; then
+        print_msg "$BLUE" "Используется curl для загрузки..."
+        
+        # Download with curl
+        if curl -sSL -o "$temp_file" "$url"; then
+            # Check if file exists and has content
             if [ -f "$temp_file" ] && [ -s "$temp_file" ]; then
-                print_msg "$GREEN" "Файл успешно загружен"
-                echo "$temp_file"
-                return 0
+                # Verify it's a Python script
+                local first_line=$(head -n 1 "$temp_file")
+                if echo "$first_line" | grep -q "python"; then
+                    local file_size=$(stat -f%z "$temp_file" 2>/dev/null || stat -c%s "$temp_file" 2>/dev/null)
+                    print_msg "$GREEN" "Файл успешно загружен ($file_size байт)"
+                    echo "$temp_file"
+                    return 0
+                else
+                    print_msg "$YELLOW" "Предупреждение: Загружен не Python файл"
+                    print_msg "$YELLOW" "Первая строка: $first_line"
+                fi
+            else
+                print_msg "$YELLOW" "Файл пустой или не создан"
             fi
+        else
+            print_msg "$YELLOW" "curl вернул ошибку: $?"
         fi
     fi
     
     # If we got here, download failed
     rm -f "$temp_file" 2>/dev/null
     print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py с GitHub."
-    print_msg "$YELLOW" "Проверьте:"
-    print_msg "$YELLOW" "  1. Подключение к интернету"
-    print_msg "$YELLOW" "  2. Доступность GitHub"
-    print_msg "$YELLOW" "  3. URL: $url"
+    print_msg "$YELLOW" ""
+    print_msg "$YELLOW" "Возможные причины:"
+    print_msg "$YELLOW" "  1. Нет подключения к интернету"
+    print_msg "$YELLOW" "  2. GitHub недоступен"
+    print_msg "$YELLOW" "  3. Файл не существует в репозитории"
+    print_msg "$YELLOW" ""
+    print_msg "$YELLOW" "Диагностика:"
+    print_msg "$YELLOW" "  Попробуйте вручную: curl -I $url"
+    
     return 1
 }
 
@@ -236,6 +279,7 @@ install_program() {
     
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
     local mygit_source=""
+    local download_status=0
     
     # Check if mygit.py exists locally
     if [ -f "$SCRIPT_DIR/mygit.py" ]; then
@@ -243,36 +287,76 @@ install_program() {
         mygit_source="$SCRIPT_DIR/mygit.py"
     else
         print_msg "$YELLOW" "Локальный файл mygit.py не найден, загрузка из GitHub..."
-        mygit_source=$(download_mygit)
         
-        if [ $? -ne 0 ] || [ -z "$mygit_source" ] || [ ! -f "$mygit_source" ]; then
-            print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py"
+        # Call download function and capture both output and return code
+        mygit_source=$(download_mygit)
+        download_status=$?
+        
+        # Check if download was successful
+        if [ $download_status -ne 0 ]; then
+            print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py (код: $download_status)"
+            print_msg "$YELLOW" ""
+            print_msg "$YELLOW" "Альтернативные способы установки:"
+            print_msg "$YELLOW" "  1. Клонируйте репозиторий полностью:"
+            print_msg "$YELLOW" "     git clone https://github.com/${GITHUB_REPO}.git"
+            print_msg "$YELLOW" "     cd connect && sudo bash install.sh"
+            print_msg "$YELLOW" ""
+            print_msg "$YELLOW" "  2. Скачайте файл вручную:"
+            print_msg "$YELLOW" "     wget https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/mygit.py"
+            print_msg "$YELLOW" "     sudo bash install.sh"
+            exit 1
+        fi
+        
+        # Verify the downloaded file
+        if [ -z "$mygit_source" ] || [ ! -f "$mygit_source" ] || [ ! -s "$mygit_source" ]; then
+            print_msg "$RED" "Ошибка: Загруженный файл недействителен"
+            print_msg "$YELLOW" "Источник: '$mygit_source'"
+            [ -f "$mygit_source" ] && print_msg "$YELLOW" "Размер: $(wc -c < "$mygit_source") байт"
             exit 1
         fi
     fi
     
-    # Copy to installation directory
-    if [ -f "$mygit_source" ]; then
-        cp "$mygit_source" "$INSTALL_DIR/mygit.py"
-        chmod +x "$INSTALL_DIR/mygit.py"
-        
-        # Clean up temp file if it was downloaded
-        if echo "$mygit_source" | grep -q "^/tmp/mygit_"; then
-            rm -f "$mygit_source"
-        fi
-    else
-        print_msg "$RED" "Ошибка: Не удалось найти mygit.py"
+    # Verify it's a Python file
+    if ! head -n 1 "$mygit_source" | grep -q "python"; then
+        print_msg "$RED" "Ошибка: Файл не является Python скриптом"
+        print_msg "$YELLOW" "Первая строка: $(head -n 1 "$mygit_source")"
         exit 1
+    fi
+    
+    # Copy to installation directory
+    print_msg "$BLUE" "Копирование в $INSTALL_DIR..."
+    if ! cp "$mygit_source" "$INSTALL_DIR/mygit.py"; then
+        print_msg "$RED" "Ошибка: Не удалось скопировать файл"
+        exit 1
+    fi
+    
+    chmod +x "$INSTALL_DIR/mygit.py"
+    
+    # Clean up temp file if it was downloaded
+    if echo "$mygit_source" | grep -q "^/tmp/mygit_"; then
+        print_msg "$BLUE" "Очистка временных файлов..."
+        rm -f "$mygit_source"
     fi
     
     # Create symbolic link
     if [ -L "$BIN_LINK" ] || [ -e "$BIN_LINK" ]; then
         rm -f "$BIN_LINK"
     fi
-    ln -s "$INSTALL_DIR/mygit.py" "$BIN_LINK"
+    
+    if ! ln -s "$INSTALL_DIR/mygit.py" "$BIN_LINK"; then
+        print_msg "$RED" "Ошибка: Не удалось создать символическую ссылку"
+        exit 1
+    fi
     
     print_msg "$GREEN" "MyGit успешно установлен!"
     print_msg "$GREEN" "Символическая ссылка создана: $BIN_LINK"
+    
+    # Verify installation
+    if [ -x "$BIN_LINK" ]; then
+        print_msg "$GREEN" "Проверка установки: OK"
+    else
+        print_msg "$YELLOW" "Предупреждение: Файл установлен, но может быть недоступен"
+    fi
 }
 
 print_usage() {
