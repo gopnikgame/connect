@@ -125,14 +125,20 @@ save_config() {
     # Create clone directory
     mkdir -p "$clone_dir"
     
-    # Save config as JSON
-    cat > "$CONFIG_FILE" << EOF
-{
-    "github_username": "$github_username",
-    "github_token": "$github_token",
-    "clone_directory": "$clone_dir"
+    # Save config as JSON using Python for proper escaping
+    python3 -c "
+import json
+import sys
+
+config = {
+    'github_username': sys.argv[1],
+    'github_token': sys.argv[2],
+    'clone_directory': sys.argv[3]
 }
-EOF
+
+with open(sys.argv[4], 'w') as f:
+    json.dump(config, f, indent=4)
+" "$github_username" "$github_token" "$clone_dir" "$CONFIG_FILE"
     
     # Secure the config file
     chmod 600 "$CONFIG_FILE"

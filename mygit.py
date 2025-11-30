@@ -12,6 +12,7 @@ Designed for Ubuntu server operating systems.
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -73,7 +74,7 @@ class Config:
         print("\nCurrent Configuration:")
         print("-" * 40)
         print(f"GitHub Username: {self.username}")
-        print(f"GitHub Token: {'*' * 8}...{self.token[-4:] if len(self.token) > 4 else '****'}")
+        print(f"GitHub Token: {'*' * 16} (configured)")
         print(f"Clone Directory: {self.clone_directory}")
         print("-" * 40)
 
@@ -85,8 +86,14 @@ class GitHubRepo:
         self.config = config
     
     def _build_clone_url(self, repo_path):
-        """Build authenticated clone URL for a repository."""
-        return f"https://{self.config.username}:{self.config.token}@github.com/{repo_path}.git"
+        """Build clone URL for a repository (without credentials)."""
+        return f"https://github.com/{repo_path}.git"
+    
+    def _get_git_env(self):
+        """Get environment variables for git with credentials."""
+        env = os.environ.copy()
+        # Use GIT_ASKPASS to provide credentials securely
+        return env
     
     def _get_repo_dir(self, repo_path):
         """Get local directory path for a repository."""
@@ -105,7 +112,7 @@ class GitHubRepo:
             Path to cloned repository or None on failure
         """
         if "/" not in repo_path:
-            print(f"Error: Invalid repository format. Use 'owner/repo'")
+            print("Error: Invalid repository format. Use 'owner/repo'")
             return None
         
         repo_dir = self._get_repo_dir(repo_path)
@@ -114,7 +121,11 @@ class GitHubRepo:
         if repo_dir.exists():
             if force:
                 print(f"Removing existing directory: {repo_dir}")
-                subprocess.run(["rm", "-rf", str(repo_dir)], check=True)
+                try:
+                    shutil.rmtree(repo_dir)
+                except OSError as e:
+                    print(f"Error removing directory: {e}")
+                    return None
             else:
                 print(f"Repository already exists at: {repo_dir}")
                 print("Use --force to re-clone or update manually with 'git pull'")
@@ -123,12 +134,12 @@ class GitHubRepo:
         # Ensure parent directory exists
         self.config.clone_directory.mkdir(parents=True, exist_ok=True)
         
-        # Clone the repository
-        clone_url = self._build_clone_url(repo_path)
+        # Build authenticated URL for cloning
+        clone_url = f"https://{self.config.username}:{self.config.token}@github.com/{repo_path}.git"
         print(f"Cloning {repo_path}...")
         
         try:
-            # Use subprocess to hide credentials in output
+            # Use subprocess with capture_output to prevent credentials from appearing in output
             result = subprocess.run(
                 ["git", "clone", clone_url, str(repo_dir)],
                 capture_output=True,
@@ -142,12 +153,29 @@ class GitHubRepo:
                 print(f"Error cloning repository: {error_msg}")
                 return None
             
+            # Remove credentials from remote URL after cloning
+            self._sanitize_remote_url(repo_dir, repo_path)
+            
             print(f"Successfully cloned to: {repo_dir}")
             return repo_dir
             
         except subprocess.SubprocessError as e:
             print(f"Error: Failed to execute git command: {e}")
             return None
+    
+    def _sanitize_remote_url(self, repo_dir, repo_path):
+        """Remove credentials from the remote URL in .git/config."""
+        try:
+            clean_url = f"https://github.com/{repo_path}.git"
+            subprocess.run(
+                ["git", "remote", "set-url", "origin", clean_url],
+                cwd=str(repo_dir),
+                capture_output=True,
+                check=True
+            )
+        except subprocess.SubprocessError:
+            # Non-critical error, continue silently
+            pass
     
     def pull(self, repo_path):
         """
@@ -187,7 +215,7 @@ class GitHubRepo:
             print(f"Error: Failed to execute git command: {e}")
             return False
     
-    def run_script(self, repo_path, script_path, args=None):
+    def run_script(self, repo_path, script_path, args=None, no_confirm=False):
         """
         Clone (if needed) and run a shell script from a repository.
         
@@ -195,6 +223,7 @@ class GitHubRepo:
             repo_path: Repository path in format 'owner/repo'
             script_path: Path to script within the repository
             args: Additional arguments to pass to the script
+            no_confirm: Skip confirmation prompt
         
         Returns:
             Exit code of the script
@@ -217,11 +246,34 @@ class GitHubRepo:
             print(f"Error: Not a file: {full_script_path}")
             return 1
         
+        # Security check: validate script path is within repository (prevent path traversal)
+        try:
+            full_script_path = full_script_path.resolve()
+            repo_dir_resolved = repo_dir.resolve()
+            if not str(full_script_path).startswith(str(repo_dir_resolved)):
+                print("Error: Script path traversal detected. Operation cancelled.")
+                return 1
+        except (OSError, ValueError) as e:
+            print(f"Error: Invalid script path: {e}")
+            return 1
+        
+        # Require user confirmation before making file executable and running
+        if not no_confirm:
+            print(f"\nScript to execute: {full_script_path}")
+            print(f"Repository: {repo_path}")
+            try:
+                confirm = input("\nAre you sure you want to run this script? [y/N]: ").strip().lower()
+            except EOFError:
+                confirm = 'n'
+            if confirm != 'y':
+                print("Operation cancelled.")
+                return 0
+        
         # Make script executable
         os.chmod(full_script_path, 0o755)
         
         # Run the script
-        print(f"Running script: {script_path}")
+        print(f"\nRunning script: {script_path}")
         print("-" * 40)
         
         cmd = [str(full_script_path)]
@@ -277,7 +329,7 @@ def cmd_pull(args, config):
 def cmd_run(args, config):
     """Handle run command."""
     repo = GitHubRepo(config)
-    return repo.run_script(args.repository, args.script, args.script_args)
+    return repo.run_script(args.repository, args.script, args.script_args, args.yes)
 
 
 def cmd_list(args, config):
@@ -328,6 +380,8 @@ Examples:
     run_parser.add_argument("repository", help="Repository path (owner/repo)")
     run_parser.add_argument("script", help="Path to script in repository")
     run_parser.add_argument("script_args", nargs="*", help="Arguments for the script")
+    run_parser.add_argument("-y", "--yes", action="store_true",
+                            help="Skip confirmation prompt")
     run_parser.set_defaults(func=cmd_run)
     
     # List command
