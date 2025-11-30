@@ -175,29 +175,38 @@ EOF
 # Download mygit.py from GitHub
 download_mygit() {
     local url="https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/mygit.py"
-    local temp_file="/tmp/mygit.py"
+    local temp_file="/tmp/mygit_$$.py"
     
     print_msg "$BLUE" "Загрузка mygit.py из GitHub..."
+    print_msg "$YELLOW" "URL: $url"
     
     # Try wget first, fallback to curl
     if command -v wget >/dev/null 2>&1; then
-        if ! wget -q -O "$temp_file" "$url"; then
-            print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py с GitHub."
-            print_msg "$YELLOW" "URL: $url"
-            exit 1
+        if wget -q -O "$temp_file" "$url" 2>/dev/null; then
+            if [ -f "$temp_file" ] && [ -s "$temp_file" ]; then
+                print_msg "$GREEN" "Файл успешно загружен"
+                echo "$temp_file"
+                return 0
+            fi
         fi
     elif command -v curl >/dev/null 2>&1; then
-        if ! curl -sS -o "$temp_file" "$url"; then
-            print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py с GitHub."
-            print_msg "$YELLOW" "URL: $url"
-            exit 1
+        if curl -sSf -o "$temp_file" "$url" 2>/dev/null; then
+            if [ -f "$temp_file" ] && [ -s "$temp_file" ]; then
+                print_msg "$GREEN" "Файл успешно загружен"
+                echo "$temp_file"
+                return 0
+            fi
         fi
-    else
-        print_msg "$RED" "Ошибка: Нет wget или curl для загрузки файла."
-        exit 1
     fi
     
-    echo "$temp_file"
+    # If we got here, download failed
+    rm -f "$temp_file" 2>/dev/null
+    print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py с GitHub."
+    print_msg "$YELLOW" "Проверьте:"
+    print_msg "$YELLOW" "  1. Подключение к интернету"
+    print_msg "$YELLOW" "  2. Доступность GitHub"
+    print_msg "$YELLOW" "  3. URL: $url"
+    return 1
 }
 
 install_program() {
@@ -215,6 +224,11 @@ install_program() {
     else
         print_msg "$YELLOW" "Локальный файл mygit.py не найден, загрузка из GitHub..."
         mygit_source=$(download_mygit)
+        
+        if [ $? -ne 0 ] || [ -z "$mygit_source" ] || [ ! -f "$mygit_source" ]; then
+            print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py"
+            exit 1
+        fi
     fi
     
     # Copy to installation directory
@@ -223,7 +237,7 @@ install_program() {
         chmod +x "$INSTALL_DIR/mygit.py"
         
         # Clean up temp file if it was downloaded
-        if [ "$mygit_source" = "/tmp/mygit.py" ]; then
+        if echo "$mygit_source" | grep -q "^/tmp/mygit_"; then
             rm -f "$mygit_source"
         fi
     else
