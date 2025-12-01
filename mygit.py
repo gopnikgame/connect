@@ -180,9 +180,37 @@ class GitHubRepo:
                     print(f"Ошибка удаления директории: {e}")
                     return None
             else:
-                print(f"Репозиторий уже существует по адресу: {repo_dir}")
-                print("Используйте --force для переклонирования или обновите вручную с помощью 'git pull'")
-                return repo_dir
+                print(f"\n⚠️  Репозиторий уже существует по адресу: {repo_dir}")
+                print("\nВыберите действие:")
+                print("  1. Оставить как есть (по умолчанию)")
+                print("  2. Удалить и переклонировать заново")
+                print("  3. Обновить через git pull")
+                
+                try:
+                    choice = input("\nВаш выбор [1/2/3]: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    choice = '1'
+                
+                if choice == '2':
+                    print(f"\nУдаление существующей директории: {repo_dir}")
+                    try:
+                        shutil.rmtree(repo_dir)
+                        print("Директория удалена. Переклонирование...")
+                        # Continue to cloning below
+                    except OSError as e:
+                        print(f"Ошибка удаления директории: {e}")
+                        return None
+                elif choice == '3':
+                    print(f"\nОбновление репозитория...")
+                    if self.pull(repo_path):
+                        print("Репозиторий успешно обновлен!")
+                        return repo_dir
+                    else:
+                        print("\nОшибка обновления. Попробуйте переклонировать (выбор 2).")
+                        return None
+                else:
+                    print(f"\nИспользуется существующий репозиторий: {repo_dir}")
+                    return repo_dir
         
         # Ensure parent directory exists
         self.config.clone_directory.mkdir(parents=True, exist_ok=True)
@@ -209,7 +237,7 @@ class GitHubRepo:
             # Remove credentials from remote URL after cloning
             self._sanitize_remote_url(repo_dir, repo_path)
             
-            print(f"Успешно клонировано в: {repo_dir}")
+            print(f"✅ Успешно клонировано в: {repo_dir}")
             return repo_dir
             
         except subprocess.SubprocessError as e:
@@ -572,11 +600,10 @@ class InteractiveMenu:
         if not repo_path:
             return
         
-        force = self.get_input("Принудительно переклонировать? (y/N): ").lower() == 'y'
-        
-        result = self.repo_manager.clone(repo_path, force=force)
+        # Don't ask about force mode - let clone() handle existing repos interactively
+        result = self.repo_manager.clone(repo_path, force=False)
         if result:
-            print("\nУспешно!")
+            print("\n✅ Операция успешно завершена!")
         
         self.pause()
     
