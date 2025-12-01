@@ -25,6 +25,9 @@ CONFIG_DIR="$HOME/.mygit"
 CONFIG_FILE="$CONFIG_DIR/config.json"
 BIN_LINK="/usr/local/bin/mygit"
 
+# Installation mode flag
+UPDATE_MODE=false
+
 # Print colored message
 print_msg() {
     local color=$1
@@ -36,9 +39,27 @@ print_msg() {
 print_header() {
     echo ""
     print_msg "$BLUE" "=============================================="
-    print_msg "$BLUE" "   MyGit - Коннектор приватных репозиториев   "
+    if [ "$UPDATE_MODE" = true ]; then
+        print_msg "$BLUE" "   MyGit - Обновление программы             "
+    else
+        print_msg "$BLUE" "   MyGit - Коннектор приватных репозиториев   "
+    fi
     print_msg "$BLUE" "=============================================="
     echo ""
+}
+
+# Check if config exists
+check_existing_config() {
+    if [ -f "$CONFIG_FILE" ]; then
+        print_msg "$GREEN" "Обнаружена существующая конфигурация: $CONFIG_FILE"
+        print_msg "$YELLOW" "Режим обновления: конфигурация будет сохранена, обновится только программа."
+        UPDATE_MODE=true
+        return 0
+    else
+        print_msg "$BLUE" "Конфигурация не найдена. Выполняется первичная установка."
+        UPDATE_MODE=false
+        return 1
+    fi
 }
 
 # Check if running as root for system-wide installation
@@ -47,6 +68,13 @@ check_permissions() {
         print_msg "$YELLOW" "Внимание: Скрипт запущен без прав root. Будет выполнена локальная установка."
         INSTALL_DIR="$HOME/.local/share/mygit"
         BIN_LINK="$HOME/.local/bin/mygit"
+        
+        # Update CONFIG_FILE path check after INSTALL_DIR is set
+        if [ "$UPDATE_MODE" = false ]; then
+            CONFIG_DIR="$HOME/.mygit"
+            CONFIG_FILE="$CONFIG_DIR/config.json"
+        fi
+        
         mkdir -p "$HOME/.local/bin"
         # Add to PATH if not already there
         if echo ":$PATH:" | grep -q ":$HOME/.local/bin:"; then
@@ -391,9 +419,17 @@ EOF
 
 print_usage() {
     echo ""
-    print_msg "$GREEN" "=============================================="
-    print_msg "$GREEN" "          Установка завершена!                 "
-    print_msg "$GREEN" "=============================================="
+    if [ "$UPDATE_MODE" = true ]; then
+        print_msg "$GREEN" "=============================================="
+        print_msg "$GREEN" "          Обновление завершено!                "
+        print_msg "$GREEN" "=============================================="
+        echo ""
+        print_msg "$BLUE" "Программа обновлена. Конфигурация сохранена."
+    else
+        print_msg "$GREEN" "=============================================="
+        print_msg "$GREEN" "          Установка завершена!                 "
+        print_msg "$GREEN" "=============================================="
+    fi
     echo ""
     print_msg "$BLUE" "Использование:"
     echo "  mygit clone <owner/repo>     - Клонировать приватный репозиторий"
@@ -410,11 +446,21 @@ print_usage() {
 }
 
 main() {
+    # Check for existing config first
+    check_existing_config
+    
     print_header
     check_permissions
     check_dependencies
-    get_credentials
-    save_config
+    
+    # Only ask for credentials if config doesn't exist
+    if [ "$UPDATE_MODE" = false ]; then
+        get_credentials
+        save_config
+    else
+        print_msg "$BLUE" "Пропуск настройки конфигурации (уже существует)."
+    fi
+    
     install_program
     print_usage
 }
