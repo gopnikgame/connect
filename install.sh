@@ -567,7 +567,7 @@ print_usage() {
 }
 
 main() {
-    # Check for existing config first
+    ## Check for existing config first
     check_existing_config
     
     print_header
