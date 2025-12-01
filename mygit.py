@@ -16,6 +16,8 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+import urllib.request
+import urllib.error
 
 
 class Config:
@@ -79,11 +81,68 @@ class Config:
         print("-" * 40)
 
 
+class GitHubAPI:
+    """Класс для работы с GitHub API."""
+    
+    def __init__(self, username, token):
+        self.username = username
+        self.token = token
+        self.api_base = "https://api.github.com"
+    
+    def _make_request(self, endpoint):
+        """Выполнить запрос к GitHub API."""
+        url = f"{self.api_base}{endpoint}"
+        request = urllib.request.Request(url)
+        request.add_header("Authorization", f"token {self.token}")
+        request.add_header("Accept", "application/vnd.github.v3+json")
+        
+        try:
+            with urllib.request.urlopen(request) as response:
+                return json.loads(response.read().decode())
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                print("Ошибка: Неверный токен доступа")
+            elif e.code == 403:
+                print("Ошибка: Доступ запрещен. Проверьте права токена")
+            else:
+                print(f"Ошибка HTTP {e.code}: {e.reason}")
+            return None
+        except urllib.error.URLError as e:
+            print(f"Ошибка соединения: {e.reason}")
+            return None
+    
+    def get_user_repos(self):
+        """Получить список всех репозиториев пользователя."""
+        repos = []
+        page = 1
+        per_page = 100
+        
+        while True:
+            endpoint = f"/user/repos?page={page}&per_page={per_page}&affiliation=owner,collaborator"
+            data = self._make_request(endpoint)
+            
+            if data is None:
+                break
+            
+            if not data:
+                break
+            
+            repos.extend(data)
+            
+            if len(data) < per_page:
+                break
+            
+            page += 1
+        
+        return repos
+
+
 class GitHubRepo:
     """Менеджер операций с репозиториями GitHub."""
     
     def __init__(self, config):
         self.config = config
+        self.api = GitHubAPI(config.username, config.token)
     
     def _build_clone_url(self, repo_path):
         """Построить URL клонирования для репозитория (без учетных данных)."""
@@ -319,6 +378,312 @@ class GitHubRepo:
         print(f"Всего: {len(repos)} репозиториев")
         
         return repos
+    
+    def find_shell_scripts(self, repo_path):
+        """Найти все .sh файлы в репозитории."""
+        repo_dir = self._get_repo_dir(repo_path)
+        
+        if not repo_dir.exists():
+            return []
+        
+        scripts = []
+        try:
+            for root, dirs, files in os.walk(repo_dir):
+                # Skip .git directory
+                if '.git' in dirs:
+                    dirs.remove('.git')
+                
+                for file in files:
+                    if file.endswith('.sh'):
+                        full_path = Path(root) / file
+                        relative_path = full_path.relative_to(repo_dir)
+                        scripts.append(str(relative_path))
+        except (PermissionError, OSError) as e:
+            print(f"Ошибка поиска скриптов: {e}")
+            return []
+        
+        return sorted(scripts)
+
+
+class InteractiveMenu:
+    """Интерактивное меню для работы с MyGit."""
+    
+    def __init__(self, config):
+        self.config = config
+        self.repo_manager = GitHubRepo(config)
+    
+    def clear_screen(self):
+        """Очистить экран консоли."""
+        os.system('cls' if os.name == 'nt' else 'clear')
+    
+    def pause(self):
+        """Пауза перед возвратом в меню."""
+        try:
+            input("\nНажмите Enter для продолжения...")
+        except EOFError:
+            pass
+    
+    def get_input(self, prompt):
+        """Получить ввод от пользователя с обработкой EOF."""
+        try:
+            return input(prompt).strip()
+        except EOFError:
+            return ""
+    
+    def main_menu(self):
+        """Главное меню."""
+        while True:
+            self.clear_screen()
+            print("=" * 50)
+            print("MyGit - Менеджер приватных репозиториев GitHub")
+            print("=" * 50)
+            print(f"\nПользователь: {self.config.username}")
+            print(f"Директория: {self.config.clone_directory}")
+            print("\n1. Просмотреть мои репозитории на GitHub")
+            print("2. Клонировать репозиторий")
+            print("3. Обновить репозиторий (git pull)")
+            print("4. Просмотреть локальные репозитории")
+            print("5. Запустить скрипт из репозитория")
+            print("6. Показать конфигурацию")
+            print("0. Выход")
+            print("-" * 50)
+            
+            choice = self.get_input("Выберите действие: ")
+            
+            if choice == "1":
+                self.browse_github_repos()
+            elif choice == "2":
+                self.clone_repo_interactive()
+            elif choice == "3":
+                self.pull_repo_interactive()
+            elif choice == "4":
+                self.browse_local_repos()
+            elif choice == "5":
+                self.run_script_interactive()
+            elif choice == "6":
+                self.config.show()
+                self.pause()
+            elif choice == "0":
+                print("\nДо свидания!")
+                break
+            else:
+                print("\nНеверный выбор. Попробуйте снова.")
+                self.pause()
+    
+    def browse_github_repos(self):
+        """Просмотр репозиториев на GitHub."""
+        self.clear_screen()
+        print("=" * 50)
+        print("Загрузка репозиториев с GitHub...")
+        print("=" * 50)
+        
+        repos = self.repo_manager.api.get_user_repos()
+        
+        if repos is None:
+            print("\nНе удалось загрузить репозитории.")
+            self.pause()
+            return
+        
+        if not repos:
+            print("\nРепозитории не найдены.")
+            self.pause()
+            return
+        
+        while True:
+            self.clear_screen()
+            print("=" * 50)
+            print(f"Ваши репозитории на GitHub (всего: {len(repos)})")
+            print("=" * 50)
+            
+            for idx, repo in enumerate(repos, 1):
+                private = "🔒 " if repo.get('private') else "🔓 "
+                print(f"{idx}. {private}{repo['full_name']}")
+                print(f"   Описание: {repo.get('description', 'Нет описания')}")
+                print()
+            
+            print("0. Вернуться в главное меню")
+            print("-" * 50)
+            
+            choice = self.get_input("Выберите репозиторий для клонирования (или 0): ")
+            
+            if choice == "0":
+                break
+            
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(repos):
+                    repo_path = repos[idx]['full_name']
+                    print(f"\nКлонирование {repo_path}...")
+                    result = self.repo_manager.clone(repo_path)
+                    if result:
+                        print("\nУспешно!")
+                    self.pause()
+                else:
+                    print("\nНеверный номер репозитория.")
+                    self.pause()
+            except ValueError:
+                print("\nПожалуйста, введите число.")
+                self.pause()
+    
+    def clone_repo_interactive(self):
+        """Интерактивное клонирование репозитория."""
+        self.clear_screen()
+        print("=" * 50)
+        print("Клонирование репозитория")
+        print("=" * 50)
+        
+        repo_path = self.get_input("\nВведите путь к репозиторию (owner/repo): ")
+        
+        if not repo_path:
+            return
+        
+        force = self.get_input("Принудительно переклонировать? (y/N): ").lower() == 'y'
+        
+        result = self.repo_manager.clone(repo_path, force=force)
+        if result:
+            print("\nУспешно!")
+        
+        self.pause()
+    
+    def pull_repo_interactive(self):
+        """Интерактивное обновление репозитория."""
+        self.clear_screen()
+        print("=" * 50)
+        print("Обновление репозитория")
+        print("=" * 50)
+        
+        repo_path = self.get_input("\nВведите путь к репозиторию (owner/repo): ")
+        
+        if not repo_path:
+            return
+        
+        self.repo_manager.pull(repo_path)
+        self.pause()
+    
+    def browse_local_repos(self):
+        """Просмотр локальных репозиториев."""
+        while True:
+            self.clear_screen()
+            print("=" * 50)
+            print("Локальные репозитории")
+            print("=" * 50)
+            
+            clone_dir = self.config.clone_directory
+            
+            if not clone_dir.exists():
+                print("\nРепозитории еще не клонированы.")
+                self.pause()
+                return
+            
+            repos = []
+            try:
+                for d in clone_dir.iterdir():
+                    if d.is_dir() and (d / ".git").exists():
+                        repos.append(d.name)
+            except (PermissionError, OSError) as e:
+                print(f"\nОшибка доступа: {e}")
+                self.pause()
+                return
+            
+            if not repos:
+                print("\nРепозитории еще не клонированы.")
+                self.pause()
+                return
+            
+            repos = sorted(repos)
+            
+            for idx, repo in enumerate(repos, 1):
+                repo_path = clone_dir / repo
+                print(f"{idx}. {repo}")
+                print(f"   Путь: {repo_path}")
+                
+                # Show shell scripts count
+                scripts = self.repo_manager.find_shell_scripts(f"{self.config.username}/{repo}")
+                if scripts:
+                    print(f"   📜 Найдено скриптов: {len(scripts)}")
+                print()
+            
+            print("0. Вернуться в главное меню")
+            print("-" * 50)
+            
+            choice = self.get_input("Выберите репозиторий для просмотра скриптов (или 0): ")
+            
+            if choice == "0":
+                break
+            
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(repos):
+                    self.browse_scripts(f"{self.config.username}/{repos[idx]}")
+                else:
+                    print("\nНеверный номер репозитория.")
+                    self.pause()
+            except ValueError:
+                print("\nПожалуйста, введите число.")
+                self.pause()
+    
+    def browse_scripts(self, repo_path):
+        """Просмотр скриптов в репозитории."""
+        while True:
+            self.clear_screen()
+            print("=" * 50)
+            print(f"Скрипты в репозитории: {repo_path}")
+            print("=" * 50)
+            
+            scripts = self.repo_manager.find_shell_scripts(repo_path)
+            
+            if not scripts:
+                print("\nСкрипты .sh не найдены в этом репозитории.")
+                self.pause()
+                return
+            
+            for idx, script in enumerate(scripts, 1):
+                print(f"{idx}. {script}")
+            
+            print("\n0. Назад")
+            print("-" * 50)
+            
+            choice = self.get_input("Выберите скрипт для запуска (или 0): ")
+            
+            if choice == "0":
+                break
+            
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(scripts):
+                    script_path = scripts[idx]
+                    print(f"\nЗапуск скрипта: {script_path}")
+                    print(f"Репозиторий: {repo_path}")
+                    
+                    confirm = self.get_input("\nЗапустить этот скрипт? (y/N): ").lower()
+                    
+                    if confirm == 'y':
+                        self.repo_manager.run_script(repo_path, script_path, no_confirm=True)
+                        self.pause()
+                else:
+                    print("\nНеверный номер скрипта.")
+                    self.pause()
+            except ValueError:
+                print("\nПожалуйста, введите число.")
+                self.pause()
+    
+    def run_script_interactive(self):
+        """Интерактивный запуск скрипта."""
+        self.clear_screen()
+        print("=" * 50)
+        print("Запуск скрипта")
+        print("=" * 50)
+        
+        repo_path = self.get_input("\nВведите путь к репозиторию (owner/repo): ")
+        if not repo_path:
+            return
+        
+        script_path = self.get_input("Введите путь к скрипту в репозитории: ")
+        if not script_path:
+            return
+        
+        self.repo_manager.run_script(repo_path, script_path)
+        self.pause()
 
 
 def cmd_clone(args, config):
@@ -362,6 +727,7 @@ def main():
         epilog="""
 
 Примеры:
+  mygit                           Запустить в интерактивном режиме
   mygit clone owner/repo          Клонировать приватный репозиторий
   mygit clone owner/repo --force  Принудительно переклонировать
   mygit pull owner/repo           Получить последние изменения
@@ -404,13 +770,15 @@ def main():
     
     args = parser.parse_args()
     
-    if args.command is None:
-        parser.print_help()
-        return 0
-    
     # Load configuration
     config = Config()
     config.load()
+    
+    # If no command specified, run interactive menu
+    if args.command is None:
+        menu = InteractiveMenu(config)
+        menu.main_menu()
+        return 0
     
     # Execute command
     return args.func(args, config)
