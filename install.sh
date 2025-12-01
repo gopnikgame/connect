@@ -13,6 +13,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # GitHub repository settings
@@ -42,7 +43,8 @@ print_header() {
     if [ "$UPDATE_MODE" = true ]; then
         print_msg "$BLUE" "   MyGit - Обновление программы             "
     else
-        print_msg "$BLUE" "   MyGit - Коннектор приватных репозиториев   "
+        print_msg "$CYAN" "   MyGit - Коннектор приватных репозиториев   "
+        print_msg "$CYAN" "   Интерактивный режим + GitHub API          "
     fi
     print_msg "$BLUE" "=============================================="
     echo ""
@@ -146,6 +148,18 @@ check_dependencies() {
         print_msg "$GREEN" "Все зависимости установлены."
     fi
     
+    # Check Python version
+    print_msg "$BLUE" "Проверка версии Python..."
+    python_version=$(python3 --version 2>&1 | awk '{print $2}')
+    python_major=$(echo "$python_version" | cut -d. -f1)
+    python_minor=$(echo "$python_version" | cut -d. -f2)
+    
+    if [ "$python_major" -lt 3 ] || ([ "$python_major" -eq 3 ] && [ "$python_minor" -lt 6 ]); then
+        print_msg "$RED" "Ошибка: Требуется Python 3.6 или выше (обнаружен $python_version)"
+        exit 1
+    fi
+    print_msg "$GREEN" "Python версия: $python_version ✓"
+    
     # Test internet connectivity
     print_msg "$BLUE" "Проверка подключения к GitHub..."
     if command -v wget >/dev/null 2>&1; then
@@ -163,10 +177,91 @@ check_dependencies() {
             print_msg "$GREEN" "Подключение к GitHub работает"
         fi
     fi
+    
+    # Test GitHub API connectivity
+    print_msg "$BLUE" "Проверка подключения к GitHub API..."
+    if command -v curl >/dev/null 2>&1; then
+        if curl -sSf --max-time 10 https://api.github.com >/dev/null 2>&1; then
+            print_msg "$GREEN" "Подключение к GitHub API работает"
+        else
+            print_msg "$YELLOW" "Предупреждение: GitHub API может быть недоступен"
+        fi
+    fi
+}
+
+# Validate GitHub token
+validate_github_token() {
+    local username=$1
+    local token=$2
+    
+    print_msg "$BLUE" "Проверка токена GitHub..."
+    
+    if ! command -v curl >/dev/null 2>&1; then
+        print_msg "$YELLOW" "Предупреждение: curl не установлен, пропуск проверки токена"
+        return 0
+    fi
+    
+    # Test API access
+    local response=$(curl -s -H "Authorization: token $token" \
+                          -H "Accept: application/vnd.github.v3+json" \
+                          -w "\n%{http_code}" \
+                          https://api.github.com/user 2>/dev/null)
+    
+    local http_code=$(echo "$response" | tail -n1)
+    local body=$(echo "$response" | sed '$d')
+    
+    if [ "$http_code" = "200" ]; then
+        local api_username=$(echo "$body" | grep -o '"login"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
+        
+        if [ -n "$api_username" ]; then
+            if [ "$api_username" != "$username" ]; then
+                print_msg "$YELLOW" "Предупреждение: Токен принадлежит пользователю '$api_username', а не '$username'"
+                print_msg "$YELLOW" "Продолжить? [y/N]: "
+                read -r confirm
+                if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                    print_msg "$RED" "Установка отменена"
+                    exit 1
+                fi
+            else
+                print_msg "$GREEN" "Токен успешно проверен для пользователя: $api_username ✓"
+            fi
+            
+            # Check token scopes
+            local scopes_header=$(curl -s -I \
+                                      -H "Authorization: token $token" \
+                                      https://api.github.com/user 2>/dev/null | \
+                                      grep -i "x-oauth-scopes:" | cut -d: -f2 | tr -d '[:space:]')
+            
+            if echo "$scopes_header" | grep -q "repo"; then
+                print_msg "$GREEN" "Токен имеет необходимые права доступа (repo) ✓"
+            else
+                print_msg "$YELLOW" "Предупреждение: Токен может не иметь прав 'repo'"
+                print_msg "$YELLOW" "Текущие права: $scopes_header"
+                print_msg "$YELLOW" "Для доступа к приватным репозиториям требуется право 'repo'"
+            fi
+        fi
+    elif [ "$http_code" = "401" ]; then
+        print_msg "$RED" "Ошибка: Неверный токен доступа"
+        print_msg "$YELLOW" "Проверьте токен на: https://github.com/settings/tokens"
+        exit 1
+    elif [ "$http_code" = "403" ]; then
+        print_msg "$RED" "Ошибка: Доступ запрещен (возможно, токен истек)"
+        exit 1
+    else
+        print_msg "$YELLOW" "Предупреждение: Не удалось проверить токен (HTTP $http_code)"
+        print_msg "$YELLOW" "Продолжить установку? [y/N]: "
+        read -r confirm
+        if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+            print_msg "$RED" "Установка отменена"
+            exit 1
+        fi
+    fi
 }
 
 get_credentials() {
-    print_msg "$BLUE" "Настройка доступа к GitHub..."
+    print_msg "$CYAN" "=============================================="
+    print_msg "$CYAN" "   Настройка доступа к GitHub                 "
+    print_msg "$CYAN" "=============================================="
     echo ""
     
     printf "Введите ваше имя пользователя GitHub: "
@@ -177,9 +272,16 @@ get_credentials() {
     fi
     
     echo ""
-    print_msg "$YELLOW" "Вам необходим GitHub Personal Access Token (PAT) с правами 'repo'."
-    print_msg "$YELLOW" "Создайте его на: https://github.com/settings/tokens"
+    print_msg "$YELLOW" "Вам необходим GitHub Personal Access Token (PAT)."
+    print_msg "$YELLOW" ""
+    print_msg "$YELLOW" "Требуемые права (scopes):"
+    print_msg "$YELLOW" "  ✓ repo - полный доступ к репозиториям (обязательно)"
+    print_msg "$YELLOW" "  ✓ read:org - чтение информации об организациях (рекомендуется)"
+    print_msg "$YELLOW" ""
+    print_msg "$CYAN" "Создайте токен здесь: https://github.com/settings/tokens"
+    print_msg "$CYAN" "Или используйте новый тип токена: https://github.com/settings/personal-access-tokens/new"
     echo ""
+    
     printf "Введите ваш GitHub Personal Access Token: "
     stty -echo 2>/dev/null || true
     read github_token
@@ -191,12 +293,18 @@ get_credentials() {
         exit 1
     fi
     
+    # Validate the token
+    validate_github_token "$github_username" "$github_token"
+    
     echo ""
     printf "Введите директорию по умолчанию для клонирования репозиториев [$HOME/mygit-repos]: "
     read clone_dir
     if [ -z "$clone_dir" ]; then
         clone_dir="$HOME/mygit-repos"
     fi
+    
+    # Expand tilde if present
+    clone_dir="${clone_dir/#\~/$HOME}"
 }
 
 save_config() {
@@ -219,6 +327,7 @@ EOF
     chmod 600 "$CONFIG_FILE"
     
     print_msg "$GREEN" "Конфигурация сохранена в $CONFIG_FILE"
+    print_msg "$GREEN" "Директория клонирования: $clone_dir"
 }
 
 # Download mygit.py from GitHub
@@ -328,10 +437,6 @@ install_program() {
         mygit_source=$(download_mygit)
         download_status=$?
         
-        # Debug output
-        print_msg "$BLUE" "Debug: download_status=$download_status" >&2
-        print_msg "$BLUE" "Debug: mygit_source='$mygit_source'" >&2
-        
         # Check if download was successful
         if [ $download_status -ne 0 ]; then
             print_msg "$RED" "Ошибка: Не удалось загрузить mygit.py (код: $download_status)"
@@ -431,18 +536,34 @@ print_usage() {
         print_msg "$GREEN" "=============================================="
     fi
     echo ""
-    print_msg "$BLUE" "Использование:"
+    print_msg "$CYAN" "🚀 Основные возможности MyGit:"
+    echo ""
+    print_msg "$BLUE" "📋 ИНТЕРАКТИВНЫЙ РЕЖИМ (рекомендуется):"
+    echo "  mygit                        - Запустить интерактивное меню"
+    echo "                                 • Просмотр всех ваших репозиториев на GitHub"
+    echo "                                 • Клонирование через меню"
+    echo "                                 • Автопоиск .sh скриптов"
+    echo "                                 • Запуск скриптов через GUI"
+    echo ""
+    print_msg "$BLUE" "⚡ КОМАНДНАЯ СТРОКА (для автоматизации):"
     echo "  mygit clone <owner/repo>     - Клонировать приватный репозиторий"
+    echo "  mygit pull <owner/repo>      - Обновить репозиторий"
     echo "  mygit run <owner/repo> <script.sh> - Клонировать и запустить скрипт"
     echo "  mygit list                   - Список клонированных репозиториев"
     echo "  mygit config                 - Показать текущую конфигурацию"
     echo "  mygit --help                 - Показать справку"
     echo ""
+    print_msg "$CYAN" "💡 Совет: Запустите просто 'mygit' для интерактивной работы!"
+    echo ""
+    
     if [ "$(id -u)" -ne 0 ]; then
-        print_msg "$YELLOW" "Примечание: Вам может потребоваться перезапустить терминал или выполнить:"
+        print_msg "$YELLOW" "⚠️  Примечание: Вам может потребоваться перезапустить терминал или выполнить:"
         print_msg "$YELLOW" "  source ~/.bashrc"
         print_msg "$YELLOW" "чтобы использовать команду 'mygit'."
+        echo ""
     fi
+    
+    print_msg "$GREEN" "✅ Готово к использованию! Запустите: mygit"
 }
 
 main() {
