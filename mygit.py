@@ -547,18 +547,72 @@ class InteractiveMenu:
     
     def pull_repo_interactive(self):
         """Интерактивное обновление репозитория."""
-        self.clear_screen()
-        print("=" * 50)
-        print("Обновление репозитория")
-        print("=" * 50)
-        
-        repo_path = self.get_input("\nВведите путь к репозиторию (owner/repo): ")
-        
-        if not repo_path:
-            return
-        
-        self.repo_manager.pull(repo_path)
-        self.pause()
+        while True:
+            self.clear_screen()
+            print("=" * 50)
+            print("Обновление репозитория")
+            print("=" * 50)
+            
+            clone_dir = self.config.clone_directory
+            
+            if not clone_dir.exists():
+                print("\nРепозитории еще не клонированы.")
+                self.pause()
+                return
+            
+            repos = []
+            try:
+                for d in clone_dir.iterdir():
+                    if d.is_dir() and (d / ".git").exists():
+                        repos.append(d.name)
+            except (PermissionError, OSError) as e:
+                print(f"\nОшибка доступа: {e}")
+                self.pause()
+                return
+            
+            if not repos:
+                print("\nРепозитории еще не клонированы.")
+                self.pause()
+                return
+            
+            repos = sorted(repos)
+            
+            print("\nВыберите репозиторий для обновления:\n")
+            for idx, repo in enumerate(repos, 1):
+                repo_path = clone_dir / repo
+                print(f"{idx}. {repo}")
+                print(f"   Путь: {repo_path}")
+                print()
+            
+            print("0. Вернуться в главное меню")
+            print("-" * 50)
+            
+            choice = self.get_input("Выберите репозиторий для обновления (или 0): ")
+            
+            if choice == "0":
+                break
+            
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(repos):
+                    repo_name = repos[idx]
+                    # Construct full repository path (username/repo)
+                    repo_path = f"{self.config.username}/{repo_name}"
+                    
+                    print(f"\nОбновление {repo_path}...")
+                    result = self.repo_manager.pull(repo_path)
+                    
+                    if result:
+                        print("\nУспешно обновлено!")
+                    
+                    self.pause()
+                    break
+                else:
+                    print("\nНеверный номер репозитория.")
+                    self.pause()
+            except ValueError:
+                print("\nПожалуйста, введите число.")
+                self.pause()
     
     def browse_local_repos(self):
         """Просмотр локальных репозиториев."""
