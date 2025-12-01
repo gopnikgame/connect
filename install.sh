@@ -56,11 +56,9 @@ check_existing_config() {
         print_msg "$GREEN" "Обнаружена существующая конфигурация: $CONFIG_FILE"
         print_msg "$YELLOW" "Режим обновления: конфигурация будет сохранена, обновится только программа."
         UPDATE_MODE=true
-        return 0
     else
         print_msg "$BLUE" "Конфигурация не найдена. Выполняется первичная установка."
         UPDATE_MODE=false
-        return 1
     fi
 }
 
@@ -567,7 +565,7 @@ print_usage() {
 }
 
 main() {
-    ## Check for existing config first
+    # Check for existing config first
     check_existing_config
     
     print_header
