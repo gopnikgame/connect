@@ -249,7 +249,20 @@ class GitHubRepo:
         
         print(f"Получение последних изменений для {repo_path}...")
         
+        # Temporarily set remote URL with credentials for pull
+        auth_url = f"https://{self.config.username}:{self.config.token}@github.com/{repo_path}.git"
+        clean_url = f"https://github.com/{repo_path}.git"
+        
         try:
+            # Set authenticated URL
+            subprocess.run(
+                ["git", "remote", "set-url", "origin", auth_url],
+                cwd=str(repo_dir),
+                capture_output=True,
+                check=True
+            )
+            
+            # Perform pull
             result = subprocess.run(
                 ["git", "pull"],
                 cwd=str(repo_dir),
@@ -257,14 +270,36 @@ class GitHubRepo:
                 text=True
             )
             
+            # Always restore clean URL (even if pull failed)
+            subprocess.run(
+                ["git", "remote", "set-url", "origin", clean_url],
+                cwd=str(repo_dir),
+                capture_output=True,
+                check=False
+            )
+            
             if result.returncode != 0:
-                print(f"Ошибка получения изменений репозитория: {result.stderr}")
+                # Sanitize error message to remove credentials
+                error_msg = result.stderr.replace(self.config.token, "***")
+                error_msg = error_msg.replace(self.config.username, "***")
+                print(f"Ошибка получения изменений репозитория: {error_msg}")
                 return False
             
             print(result.stdout)
             return True
             
         except subprocess.SubprocessError as e:
+            # Restore clean URL in case of exception
+            try:
+                subprocess.run(
+                    ["git", "remote", "set-url", "origin", clean_url],
+                    cwd=str(repo_dir),
+                    capture_output=True,
+                    check=False
+                )
+            except:
+                pass
+            
             print(f"Ошибка: Не удалось выполнить команду git: {e}")
             return False
     
