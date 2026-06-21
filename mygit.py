@@ -20,6 +20,66 @@ import urllib.request
 import urllib.error
 
 
+class TerminalUI:
+    """Единое оформление интерактивного терминального интерфейса."""
+
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    CYAN = "\033[36m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    RED = "\033[31m"
+    MAGENTA = "\033[35m"
+    WHITE = "\033[97m"
+    WIDTH = 64
+
+    def __init__(self):
+        self.color_enabled = (
+            sys.stdout.isatty()
+            and "NO_COLOR" not in os.environ
+            and os.environ.get("TERM") != "dumb"
+        )
+        if self.color_enabled and os.name == "nt":
+            os.system("")
+
+    def style(self, text, *codes):
+        if not self.color_enabled or not codes:
+            return str(text)
+        return f"{''.join(codes)}{text}{self.RESET}"
+
+    def header(self, title, subtitle=None):
+        line = "─" * self.WIDTH
+        print(self.style(f"┌{line}┐", self.CYAN))
+        print(self.style(f"  {title}", self.BOLD, self.WHITE))
+        if subtitle:
+            print(self.style(f"  {subtitle}", self.DIM))
+        print(self.style(f"└{line}┘", self.CYAN))
+
+    def section(self, title):
+        print(self.style(f"\n  {title}", self.BOLD, self.CYAN))
+        print(self.style("  " + "─" * (self.WIDTH - 2), self.DIM))
+
+    def option(self, key, title, hint=None, color=None):
+        key_text = self.style(f"[{key}]", self.BOLD, color or self.GREEN)
+        print(f"  {key_text} {self.style(title, self.BOLD)}")
+        if hint:
+            print(self.style(f"      {hint}", self.DIM))
+
+    def prompt(self, text):
+        return self.style(f"\n  › {text} ", self.BOLD, self.YELLOW)
+
+    def status(self, kind, message):
+        styles = {
+            "success": ("✓", self.GREEN),
+            "warning": ("!", self.YELLOW),
+            "error": ("×", self.RED),
+            "info": ("•", self.CYAN),
+        }
+        marker, color = styles[kind]
+        print(f"\n  {self.style(marker, self.BOLD, color)} {message}")
+
+
 class Config:
     """Менеджер конфигурации для MyGit."""
     
@@ -474,6 +534,7 @@ class InteractiveMenu:
     def __init__(self, config):
         self.config = config
         self.repo_manager = GitHubRepo(config)
+        self.ui = TerminalUI()
     
     def clear_screen(self):
         """Очистить экран консоли."""
@@ -482,7 +543,7 @@ class InteractiveMenu:
     def pause(self):
         """Пауза перед возвратом в меню."""
         try:
-            input("\nНажмите Enter для продолжения...")
+            input(self.ui.prompt("Нажмите Enter, чтобы продолжить..."))
         except EOFError:
             pass
     
@@ -497,77 +558,69 @@ class InteractiveMenu:
         """Главное меню."""
         while True:
             self.clear_screen()
-            print("=" * 50)
-            print("MyGit - Менеджер приватных репозиториев GitHub")
-            print("=" * 50)
-            print(f"\nПользователь: {self.config.username}")
-            print(f"Директория: {self.config.clone_directory}")
-            print("\n1. Просмотреть мои репозитории на GitHub")
-            print("2. Клонировать репозиторий")
-            print("3. Обновить репозиторий (git pull)")
-            print("4. Просмотреть локальные репозитории")
-            print("5. Запустить скрипт из репозитория")
-            print("6. Показать конфигурацию")
-            print("0. Выход")
-            print("-" * 50)
-            
-            choice = self.get_input("Выберите действие: ")
+            self.ui.header(
+                "MyGit  /  PRIVATE REPOSITORY CONSOLE",
+                "Управление репозиториями и запуск shell-скриптов",
+            )
+            print(f"\n  {self.ui.style('GitHub', self.ui.DIM)}      {self.ui.style(self.config.username, self.ui.CYAN)}")
+            print(f"  {self.ui.style('Хранилище', self.ui.DIM)}  {self.config.clone_directory}")
+            self.ui.section("ГЛАВНОЕ МЕНЮ")
+            self.ui.option("1", "Репозитории на GitHub", "просмотр, клонирование и обновление")
+            self.ui.option("2", "Локальные репозитории", "поиск и запуск shell-скриптов")
+            self.ui.option("3", "Конфигурация", "учётная запись и каталог хранения", self.ui.MAGENTA)
+            self.ui.option("0", "Выход", color=self.ui.RED)
+
+            choice = self.get_input(self.ui.prompt("Выберите действие:"))
             
             if choice == "1":
                 self.browse_github_repos()
             elif choice == "2":
-                self.clone_repo_interactive()
-            elif choice == "3":
-                self.pull_repo_interactive()
-            elif choice == "4":
                 self.browse_local_repos()
-            elif choice == "5":
-                self.run_script_interactive()
-            elif choice == "6":
+            elif choice == "3":
+                self.clear_screen()
+                self.ui.header("КОНФИГУРАЦИЯ", "Текущие параметры подключения")
                 self.config.show()
                 self.pause()
             elif choice == "0":
-                print("\nДо свидания!")
+                self.ui.status("info", "Работа завершена. До свидания!")
                 break
             else:
-                print("\nНеверный выбор. Попробуйте снова.")
+                self.ui.status("error", "Такого пункта нет. Выберите 0, 1, 2 или 3.")
                 self.pause()
     
     def browse_github_repos(self):
         """Просмотр репозиториев на GitHub."""
         self.clear_screen()
-        print("=" * 50)
-        print("Загрузка репозиториев с GitHub...")
-        print("=" * 50)
+        self.ui.header("РЕПОЗИТОРИИ GITHUB", "Получение данных через GitHub API")
+        self.ui.status("info", "Загружаю список репозиториев...")
         
         repos = self.repo_manager.api.get_user_repos()
         
         if repos is None:
-            print("\nНе удалось загрузить репозитории.")
+            self.ui.status("error", "Не удалось загрузить репозитории.")
             self.pause()
             return
         
         if not repos:
-            print("\nРепозитории не найдены.")
+            self.ui.status("warning", "Репозитории не найдены.")
             self.pause()
             return
         
         while True:
             self.clear_screen()
-            print("=" * 50)
-            print(f"Ваши репозитории на GitHub (всего: {len(repos)})")
-            print("=" * 50)
+            self.ui.header("РЕПОЗИТОРИИ GITHUB", f"Найдено: {len(repos)}  •  выберите репозиторий для клонирования")
             
             for idx, repo in enumerate(repos, 1):
-                private = "🔒 " if repo.get('private') else "🔓 "
-                print(f"{idx}. {private}{repo['full_name']}")
-                print(f"   Описание: {repo.get('description', 'Нет описания')}")
+                visibility = self.ui.style("PRIVATE", self.ui.YELLOW) if repo.get('private') else self.ui.style("PUBLIC", self.ui.GREEN)
+                number = self.ui.style(f"{idx:>2}.", self.ui.BOLD, self.ui.CYAN)
+                print(f"  {number} {self.ui.style(repo['full_name'], self.ui.BOLD)}  {visibility}")
+                description = repo.get('description') or "Без описания"
+                print(self.ui.style(f"      {description}", self.ui.DIM))
                 print()
             
-            print("0. Вернуться в главное меню")
-            print("-" * 50)
+            self.ui.option("0", "Вернуться в главное меню", color=self.ui.RED)
             
-            choice = self.get_input("Выберите репозиторий для клонирования (или 0): ")
+            choice = self.get_input(self.ui.prompt("Номер репозитория:"))
             
             if choice == "0":
                 break
@@ -576,118 +629,28 @@ class InteractiveMenu:
                 idx = int(choice) - 1
                 if 0 <= idx < len(repos):
                     repo_path = repos[idx]['full_name']
-                    print(f"\nКлонирование {repo_path}...")
+                    self.ui.status("info", f"Открываю {repo_path}...")
                     result = self.repo_manager.clone(repo_path)
                     if result:
-                        print("\nУспешно!")
+                        self.ui.status("success", "Операция успешно завершена.")
                     self.pause()
                 else:
-                    print("\nНеверный номер репозитория.")
+                    self.ui.status("error", "Репозитория с таким номером нет.")
                     self.pause()
             except ValueError:
-                print("\nПожалуйста, введите число.")
-                self.pause()
-    
-    def clone_repo_interactive(self):
-        """Интерактивное клонирование репозитория."""
-        self.clear_screen()
-        print("=" * 50)
-        print("Клонирование репозитория")
-        print("=" * 50)
-        
-        repo_path = self.get_input("\nВведите путь к репозиторию (owner/repo): ")
-        
-        if not repo_path:
-            return
-        
-        # Don't ask about force mode - let clone() handle existing repos interactively
-        result = self.repo_manager.clone(repo_path, force=False)
-        if result:
-            print("\n✅ Операция успешно завершена!")
-        
-        self.pause()
-    
-    def pull_repo_interactive(self):
-        """Интерактивное обновление репозитория."""
-        while True:
-            self.clear_screen()
-            print("=" * 50)
-            print("Обновление репозитория")
-            print("=" * 50)
-            
-            clone_dir = self.config.clone_directory
-            
-            if not clone_dir.exists():
-                print("\nРепозитории еще не клонированы.")
-                self.pause()
-                return
-            
-            repos = []
-            try:
-                for d in clone_dir.iterdir():
-                    if d.is_dir() and (d / ".git").exists():
-                        repos.append(d.name)
-            except (PermissionError, OSError) as e:
-                print(f"\nОшибка доступа: {e}")
-                self.pause()
-                return
-            
-            if not repos:
-                print("\nРепозитории еще не клонированы.")
-                self.pause()
-                return
-            
-            repos = sorted(repos)
-            
-            print("\nВыберите репозиторий для обновления:\n")
-            for idx, repo in enumerate(repos, 1):
-                repo_path = clone_dir / repo
-                print(f"{idx}. {repo}")
-                print(f"   Путь: {repo_path}")
-                print()
-            
-            print("0. Вернуться в главное меню")
-            print("-" * 50)
-            
-            choice = self.get_input("Выберите репозиторий для обновления (или 0): ")
-            
-            if choice == "0":
-                break
-            
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(repos):
-                    repo_name = repos[idx]
-                    # Construct full repository path (username/repo)
-                    repo_path = f"{self.config.username}/{repo_name}"
-                    
-                    print(f"\nОбновление {repo_path}...")
-                    result = self.repo_manager.pull(repo_path)
-                    
-                    if result:
-                        print("\nУспешно обновлено!")
-                    
-                    self.pause()
-                    break
-                else:
-                    print("\nНеверный номер репозитория.")
-                    self.pause()
-            except ValueError:
-                print("\nПожалуйста, введите число.")
+                self.ui.status("error", "Введите номер репозитория.")
                 self.pause()
     
     def browse_local_repos(self):
         """Просмотр локальных репозиториев."""
         while True:
             self.clear_screen()
-            print("=" * 50)
-            print("Локальные репозитории")
-            print("=" * 50)
+            self.ui.header("ЛОКАЛЬНЫЕ РЕПОЗИТОРИИ", "Выберите репозиторий, чтобы открыть его скрипты")
             
             clone_dir = self.config.clone_directory
             
             if not clone_dir.exists():
-                print("\nРепозитории еще не клонированы.")
+                self.ui.status("warning", "Репозитории ещё не клонированы.")
                 self.pause()
                 return
             
@@ -697,12 +660,12 @@ class InteractiveMenu:
                     if d.is_dir() and (d / ".git").exists():
                         repos.append(d.name)
             except (PermissionError, OSError) as e:
-                print(f"\nОшибка доступа: {e}")
+                self.ui.status("error", f"Ошибка доступа: {e}")
                 self.pause()
                 return
             
             if not repos:
-                print("\nРепозитории еще не клонированы.")
+                self.ui.status("warning", "Репозитории ещё не клонированы.")
                 self.pause()
                 return
             
@@ -710,19 +673,19 @@ class InteractiveMenu:
             
             for idx, repo in enumerate(repos, 1):
                 repo_path = clone_dir / repo
-                print(f"{idx}. {repo}")
-                print(f"   Путь: {repo_path}")
+                number = self.ui.style(f"{idx:>2}.", self.ui.BOLD, self.ui.CYAN)
+                print(f"  {number} {self.ui.style(repo, self.ui.BOLD)}")
+                print(self.ui.style(f"      {repo_path}", self.ui.DIM))
                 
                 # Show shell scripts count
                 scripts = self.repo_manager.find_shell_scripts(f"{self.config.username}/{repo}")
                 if scripts:
-                    print(f"   📜 Найдено скриптов: {len(scripts)}")
+                    print(f"      {self.ui.style('●', self.ui.GREEN)} Скриптов: {len(scripts)}")
                 print()
             
-            print("0. Вернуться в главное меню")
-            print("-" * 50)
+            self.ui.option("0", "Вернуться в главное меню", color=self.ui.RED)
             
-            choice = self.get_input("Выберите репозиторий для просмотра скриптов (или 0): ")
+            choice = self.get_input(self.ui.prompt("Номер репозитория:"))
             
             if choice == "0":
                 break
@@ -732,34 +695,32 @@ class InteractiveMenu:
                 if 0 <= idx < len(repos):
                     self.browse_scripts(f"{self.config.username}/{repos[idx]}")
                 else:
-                    print("\nНеверный номер репозитория.")
+                    self.ui.status("error", "Репозитория с таким номером нет.")
                     self.pause()
             except ValueError:
-                print("\nПожалуйста, введите число.")
+                self.ui.status("error", "Введите номер репозитория.")
                 self.pause()
     
     def browse_scripts(self, repo_path):
         """Просмотр скриптов в репозитории."""
         while True:
             self.clear_screen()
-            print("=" * 50)
-            print(f"Скрипты в репозитории: {repo_path}")
-            print("=" * 50)
+            self.ui.header("SHELL-СКРИПТЫ", repo_path)
             
             scripts = self.repo_manager.find_shell_scripts(repo_path)
             
             if not scripts:
-                print("\nСкрипты .sh не найдены в этом репозитории.")
+                self.ui.status("warning", "В этом репозитории нет .sh-скриптов.")
                 self.pause()
                 return
             
             for idx, script in enumerate(scripts, 1):
-                print(f"{idx}. {script}")
+                number = self.ui.style(f"{idx:>2}.", self.ui.BOLD, self.ui.CYAN)
+                print(f"  {number} {script}")
             
-            print("\n0. Назад")
-            print("-" * 50)
+            self.ui.option("0", "Назад к репозиториям", color=self.ui.RED)
             
-            choice = self.get_input("Выберите скрипт для запуска (или 0): ")
+            choice = self.get_input(self.ui.prompt("Номер скрипта:"))
             
             if choice == "0":
                 break
@@ -768,40 +729,22 @@ class InteractiveMenu:
                 idx = int(choice) - 1
                 if 0 <= idx < len(scripts):
                     script_path = scripts[idx]
-                    print(f"\nЗапуск скрипта: {script_path}")
-                    print(f"Репозиторий: {repo_path}")
+                    self.ui.section("ПОДТВЕРЖДЕНИЕ ЗАПУСКА")
+                    print(f"  Скрипт:      {self.ui.style(script_path, self.ui.YELLOW)}")
+                    print(f"  Репозиторий: {repo_path}")
                     
-                    confirm = self.get_input("\nЗапустить этот скрипт? (y/N): ").lower()
+                    confirm = self.get_input(self.ui.prompt("Запустить? [y/N]:")).lower()
                     
                     if confirm == 'y':
                         self.repo_manager.run_script(repo_path, script_path, no_confirm=True)
                         self.pause()
                 else:
-                    print("\nНеверный номер скрипта.")
+                    self.ui.status("error", "Скрипта с таким номером нет.")
                     self.pause()
             except ValueError:
-                print("\nПожалуйста, введите число.")
+                self.ui.status("error", "Введите номер скрипта.")
                 self.pause()
     
-    def run_script_interactive(self):
-        """Интерактивный запуск скрипта."""
-        self.clear_screen()
-        print("=" * 50)
-        print("Запуск скрипта")
-        print("=" * 50)
-        
-        repo_path = self.get_input("\nВведите путь к репозиторию (owner/repo): ")
-        if not repo_path:
-            return
-        
-        script_path = self.get_input("Введите путь к скрипту в репозитории: ")
-        if not script_path:
-            return
-        
-        self.repo_manager.run_script(repo_path, script_path)
-        self.pause()
-
-
 def cmd_clone(args, config):
     """Обработка команды clone."""
     repo = GitHubRepo(config)
