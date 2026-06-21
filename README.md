@@ -4,13 +4,13 @@
 ## ⚡ Быстрая установка (одна команда)
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/gopnikgame/connect/refs/heads/main/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/gopnikgame/connect/refs/heads/main/install.sh | sudo bash
 ```
 
 **Или с сохранением файла установщика:**
 
 ```bash
-wget -qO install.sh https://raw.githubusercontent.com/gopnikgame/connect/refs/heads/main/install.sh && sudo bash install.sh
+curl -sSL -o install.sh https://raw.githubusercontent.com/gopnikgame/connect/refs/heads/main/install.sh && sudo bash install.sh
 ```
 
 > **Примечание:** Скрипт автоматически загрузит `mygit.py` из GitHub и установит все необходимые зависимости.
